@@ -1,49 +1,97 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Users, TrendingUp, CheckSquare, DollarSign, ArrowUp, ArrowDown } from 'lucide-react';
+import { Users, TrendingUp, CheckSquare, DollarSign, ArrowUp, ArrowDown, Loader2 } from 'lucide-react';
 import { formatCurrency } from '@/types/crm';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid, Legend } from 'recharts';
-
-const kpis = [
-  { title: 'Total de Leads', value: '284', change: '+12%', up: true, icon: Users, color: 'bg-primary/10 text-primary' },
-  { title: 'Conversões do Mês', value: '32', change: '+8%', up: true, icon: TrendingUp, color: 'bg-success/10 text-success' },
-  { title: 'Tarefas Abertas', value: '18', change: '-3', up: false, icon: CheckSquare, color: 'bg-warning/10 text-warning' },
-  { title: 'Receita Mensal', value: formatCurrency(127500), change: '+15%', up: true, icon: DollarSign, color: 'bg-primary/10 text-primary' },
-];
-
-const funnelData = [
-  { name: 'Novo', value: 120 },
-  { name: 'Contactado', value: 85 },
-  { name: 'Negociando', value: 52 },
-  { name: 'Proposta', value: 28 },
-  { name: 'Ganho', value: 18 },
-];
-
-const monthlyData = [
-  { mes: 'Jan', recebidos: 45, convertidos: 12 },
-  { mes: 'Fev', recebidos: 52, convertidos: 15 },
-  { mes: 'Mar', recebidos: 38, convertidos: 10 },
-  { mes: 'Abr', recebidos: 65, convertidos: 22 },
-  { mes: 'Mai', recebidos: 58, convertidos: 18 },
-  { mes: 'Jun', recebidos: 72, convertidos: 28 },
-];
-
-const topSellers = [
-  { name: 'Ana Silva', leads: 45, convertidos: 12, taxa: '26.7%' },
-  { name: 'Carlos Santos', leads: 38, convertidos: 10, taxa: '26.3%' },
-  { name: 'Maria Oliveira', leads: 42, convertidos: 9, taxa: '21.4%' },
-  { name: 'João Lima', leads: 35, convertidos: 7, taxa: '20.0%' },
-];
-
-const activities = [
-  { text: 'Ana Silva converteu o lead "Tech Solutions"', time: 'Há 2 horas' },
-  { text: 'Novo lead "StartUp X" recebido via Website', time: 'Há 3 horas' },
-  { text: 'Carlos Santos completou tarefa de follow-up', time: 'Há 5 horas' },
-  { text: 'Lead "Empresa Y" movido para Negociando', time: 'Há 6 horas' },
-  { text: 'Maria Oliveira adicionou nota em "Corp Z"', time: 'Há 8 horas' },
-];
+import { useLeads, useTasks, useProfiles } from '@/hooks/use-leads';
 
 export default function DashboardPage() {
+  const { data: leads, isLoading: leadsLoading } = useLeads();
+  const { data: tasks } = useTasks();
+  const { data: profiles } = useProfiles();
+
+  if (leadsLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  const allLeads = leads || [];
+  const allTasks = tasks || [];
+  const allProfiles = profiles || [];
+
+  const now = new Date();
+  const thisMonth = now.getMonth();
+  const thisYear = now.getFullYear();
+
+  const leadsThisMonth = allLeads.filter(l => {
+    const d = new Date(l.created_at);
+    return d.getMonth() === thisMonth && d.getFullYear() === thisYear;
+  });
+
+  const conversionsThisMonth = allLeads.filter(l => {
+    const d = new Date(l.updated_at);
+    return l.status === 'ganho' && d.getMonth() === thisMonth && d.getFullYear() === thisYear;
+  });
+
+  const openTasks = allTasks.filter(t => t.status === 'pendente').length;
+  const monthlyRevenue = conversionsThisMonth.reduce((s, l) => s + Number(l.value), 0);
+
+  const kpis = [
+    { title: 'Total de Leads', value: String(allLeads.length), icon: Users, color: 'bg-primary/10 text-primary' },
+    { title: 'Conversões do Mês', value: String(conversionsThisMonth.length), icon: TrendingUp, color: 'bg-success/10 text-success' },
+    { title: 'Tarefas Abertas', value: String(openTasks), icon: CheckSquare, color: 'bg-warning/10 text-warning' },
+    { title: 'Receita Mensal', value: formatCurrency(monthlyRevenue), icon: DollarSign, color: 'bg-primary/10 text-primary' },
+  ];
+
+  // Funnel data from pipeline_stage counts
+  const stageOrder = ['novo', 'contactado', 'negociando', 'proposta_enviada', 'ganho'];
+  const stageLabels: Record<string, string> = { novo: 'Novo', contactado: 'Contactado', negociando: 'Negociando', proposta_enviada: 'Proposta', ganho: 'Ganho' };
+  const funnelData = stageOrder.map(s => ({
+    name: stageLabels[s] || s,
+    value: allLeads.filter(l => l.pipeline_stage === s).length,
+  }));
+
+  // Monthly data (last 6 months)
+  const monthlyData = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(thisYear, thisMonth - i, 1);
+    const m = d.getMonth();
+    const y = d.getFullYear();
+    const monthName = d.toLocaleString('pt-BR', { month: 'short' }).replace('.', '');
+    const received = allLeads.filter(l => { const ld = new Date(l.created_at); return ld.getMonth() === m && ld.getFullYear() === y; }).length;
+    const converted = allLeads.filter(l => { const ld = new Date(l.updated_at); return l.status === 'ganho' && ld.getMonth() === m && ld.getFullYear() === y; }).length;
+    monthlyData.push({ mes: monthName.charAt(0).toUpperCase() + monthName.slice(1), recebidos: received, convertidos: converted });
+  }
+
+  // Top sellers
+  const profileMap = Object.fromEntries(allProfiles.map(p => [p.id, p.full_name]));
+  const sellerStats: Record<string, { name: string; leads: number; convertidos: number }> = {};
+  allLeads.forEach(l => {
+    if (!l.assigned_to) return;
+    if (!sellerStats[l.assigned_to]) sellerStats[l.assigned_to] = { name: profileMap[l.assigned_to] || 'Desconhecido', leads: 0, convertidos: 0 };
+    sellerStats[l.assigned_to].leads++;
+    if (l.status === 'ganho') sellerStats[l.assigned_to].convertidos++;
+  });
+  const topSellers = Object.values(sellerStats)
+    .map(s => ({ ...s, taxa: s.leads > 0 ? ((s.convertidos / s.leads) * 100).toFixed(1) + '%' : '0%' }))
+    .sort((a, b) => b.convertidos - a.convertidos)
+    .slice(0, 5);
+
+  // Recent activities (last 10 leads by updated_at)
+  const activities = allLeads
+    .slice(0, 8)
+    .map(l => {
+      const assignee = l.assigned_to ? profileMap[l.assigned_to] || '' : '';
+      const ago = getTimeAgo(l.updated_at);
+      return {
+        text: `Lead "${l.name}" - ${l.status === 'ganho' ? 'Convertido' : l.status === 'novo' ? 'Novo lead recebido' : `Status: ${l.status}`}${assignee ? ` (${assignee})` : ''}`,
+        time: ago,
+      };
+    });
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
@@ -59,10 +107,6 @@ export default function DashboardPage() {
                 <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${kpi.color}`}>
                   <kpi.icon className="h-5 w-5" />
                 </div>
-                <span className={`text-xs font-medium flex items-center gap-0.5 ${kpi.up ? 'text-success' : 'text-destructive'}`}>
-                  {kpi.up ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
-                  {kpi.change}
-                </span>
               </div>
               <p className="text-2xl font-bold text-foreground">{kpi.value}</p>
               <p className="text-xs text-muted-foreground mt-1">{kpi.title}</p>
@@ -111,23 +155,27 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Top Vendedores do Mês</CardTitle>
+            <CardTitle className="text-base">Top Vendedores</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
-              {topSellers.map((seller, i) => (
-                <div key={seller.name} className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors">
-                  <div className="h-8 w-8 rounded-full gradient-primary flex items-center justify-center text-primary-foreground text-xs font-bold">
-                    {i + 1}
+            {topSellers.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-8">Nenhum vendedor com leads atribuídos ainda.</p>
+            ) : (
+              <div className="space-y-3">
+                {topSellers.map((seller, i) => (
+                  <div key={seller.name} className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors">
+                    <div className="h-8 w-8 rounded-full gradient-primary flex items-center justify-center text-primary-foreground text-xs font-bold">
+                      {i + 1}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground">{seller.name}</p>
+                      <p className="text-xs text-muted-foreground">{seller.leads} leads · {seller.convertidos} conversões</p>
+                    </div>
+                    <span className="text-sm font-semibold text-success">{seller.taxa}</span>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-foreground">{seller.name}</p>
-                    <p className="text-xs text-muted-foreground">{seller.leads} leads · {seller.convertidos} conversões</p>
-                  </div>
-                  <span className="text-sm font-semibold text-success">{seller.taxa}</span>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -136,20 +184,34 @@ export default function DashboardPage() {
             <CardTitle className="text-base">Atividades Recentes</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
-              {activities.map((activity, i) => (
-                <div key={i} className="flex gap-3 p-2">
-                  <div className="h-2 w-2 rounded-full bg-primary mt-2 shrink-0" />
-                  <div className="min-w-0">
-                    <p className="text-sm text-foreground">{activity.text}</p>
-                    <p className="text-xs text-muted-foreground">{activity.time}</p>
+            {activities.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-8">Nenhuma atividade recente.</p>
+            ) : (
+              <div className="space-y-3">
+                {activities.map((activity, i) => (
+                  <div key={i} className="flex gap-3 p-2">
+                    <div className="h-2 w-2 rounded-full bg-primary mt-2 shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-sm text-foreground">{activity.text}</p>
+                      <p className="text-xs text-muted-foreground">{activity.time}</p>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
     </div>
   );
+}
+
+function getTimeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `Há ${mins} min`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `Há ${hours}h`;
+  const days = Math.floor(hours / 24);
+  return `Há ${days}d`;
 }

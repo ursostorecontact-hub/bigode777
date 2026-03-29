@@ -1,25 +1,57 @@
 import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Users, ArrowRight, AlertTriangle } from 'lucide-react';
-
-const salespeople = [
-  { name: 'Ana Silva', leads: 18, closed: 12, avatar: 'AS' },
-  { name: 'Carlos Santos', leads: 22, closed: 10, avatar: 'CS' },
-  { name: 'Maria Oliveira', leads: 15, closed: 9, avatar: 'MO' },
-  { name: 'João Lima', leads: 8, closed: 7, avatar: 'JL' },
-];
-
-const unassignedLeads = [
-  { id: '1', name: 'Nova Empresa SA', source: 'Website', value: 'R$ 12.000' },
-  { id: '2', name: 'StartUp ABC', source: 'Instagram', value: 'R$ 5.500' },
-  { id: '3', name: 'Comércio XYZ', source: 'WhatsApp', value: 'R$ 8.000' },
-];
+import { Users, ArrowRight, AlertTriangle, Loader2 } from 'lucide-react';
+import { useLeads, useProfiles, useUpdateLead } from '@/hooks/use-leads';
+import { formatCurrency } from '@/types/crm';
+import { useToast } from '@/hooks/use-toast';
+import { useState } from 'react';
 
 export default function DistributionPage() {
+  const { data: leads, isLoading } = useLeads();
+  const { data: profiles } = useProfiles();
+  const updateLead = useUpdateLead();
+  const { toast } = useToast();
+  const [assignments, setAssignments] = useState<Record<string, string>>({});
+
+  const allLeads = leads || [];
+  const allProfiles = profiles || [];
+
+  const unassigned = allLeads.filter(l => !l.assigned_to && l.status !== 'ganho' && l.status !== 'perdido');
+
+  // Stats per salesperson
+  const salespeople = allProfiles.map(p => {
+    const assigned = allLeads.filter(l => l.assigned_to === p.id && l.status !== 'ganho' && l.status !== 'perdido');
+    const closedThisMonth = allLeads.filter(l => {
+      if (l.assigned_to !== p.id || l.status !== 'ganho') return false;
+      const d = new Date(l.updated_at);
+      const now = new Date();
+      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    });
+    const initials = p.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+    return {
+      id: p.id,
+      name: p.full_name,
+      leads: assigned.length,
+      closed: closedThisMonth.length,
+      avatar: initials,
+    };
+  });
+
+  const handleAssign = async (leadId: string) => {
+    const targetId = assignments[leadId];
+    if (!targetId) return;
+    await updateLead.mutateAsync({ id: leadId, assigned_to: targetId });
+    toast({ title: 'Lead atribuído com sucesso!' });
+    setAssignments(a => { const c = { ...a }; delete c[leadId]; return c; });
+  };
+
+  if (isLoading) {
+    return <div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+  }
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -41,7 +73,7 @@ export default function DistributionPage() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {salespeople.map((sp) => (
-          <Card key={sp.name} className={`transition-all hover:shadow-md ${sp.leads > 20 ? 'border-destructive/30' : ''}`}>
+          <Card key={sp.id} className={`transition-all hover:shadow-md ${sp.leads > 20 ? 'border-destructive/30' : ''}`}>
             <CardContent className="p-4">
               <div className="flex items-center gap-3 mb-3">
                 <Avatar className="h-10 w-10">
@@ -69,37 +101,44 @@ export default function DistributionPage() {
             </CardContent>
           </Card>
         ))}
+        {salespeople.length === 0 && (
+          <p className="text-muted-foreground col-span-4 text-center py-8">Nenhum vendedor cadastrado.</p>
+        )}
       </div>
 
       <Card>
         <CardContent className="p-5">
           <div className="flex items-center gap-2 mb-4">
             <Users className="h-5 w-5 text-warning" />
-            <h2 className="font-semibold text-foreground">Leads Não Atribuídos ({unassignedLeads.length})</h2>
+            <h2 className="font-semibold text-foreground">Leads Não Atribuídos ({unassigned.length})</h2>
           </div>
-          <div className="space-y-2">
-            {unassignedLeads.map((lead) => (
-              <div key={lead.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
-                <div>
-                  <p className="font-medium text-sm text-foreground">{lead.name}</p>
-                  <p className="text-xs text-muted-foreground">{lead.source} · {lead.value}</p>
+          {unassigned.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-4">Todos os leads estão atribuídos!</p>
+          ) : (
+            <div className="space-y-2">
+              {unassigned.map((lead) => (
+                <div key={lead.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
+                  <div>
+                    <p className="font-medium text-sm text-foreground">{lead.name}</p>
+                    <p className="text-xs text-muted-foreground">{lead.source} · {formatCurrency(Number(lead.value))}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Select value={assignments[lead.id] || ''} onValueChange={v => setAssignments(a => ({ ...a, [lead.id]: v }))}>
+                      <SelectTrigger className="w-36 h-8 text-xs">
+                        <SelectValue placeholder="Atribuir a..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {allProfiles.map(sp => <SelectItem key={sp.id} value={sp.id}>{sp.full_name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    <Button size="sm" variant="outline" className="h-8" onClick={() => handleAssign(lead.id)} disabled={!assignments[lead.id]}>
+                      <ArrowRight className="h-3 w-3" />
+                    </Button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Select>
-                    <SelectTrigger className="w-36 h-8 text-xs">
-                      <SelectValue placeholder="Atribuir a..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {salespeople.map(sp => <SelectItem key={sp.name} value={sp.name}>{sp.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                  <Button size="sm" variant="outline" className="h-8">
-                    <ArrowRight className="h-3 w-3" />
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

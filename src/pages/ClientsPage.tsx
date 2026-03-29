@@ -1,18 +1,11 @@
-import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import React, { useState } from 'react';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Search, UserCheck, Phone, Mail, DollarSign } from 'lucide-react';
+import { Search, UserCheck, DollarSign, Loader2 } from 'lucide-react';
 import { formatCurrency, formatDate } from '@/types/crm';
-import { useState } from 'react';
-
-const mockClients = [
-  { id: '1', name: 'Consultoria Elite', phone: '51954321098', email: 'elite@consult.com', tags: ['VIP', 'Recorrente'], total_revenue: 125000, created_at: '2025-01-10' },
-  { id: '2', name: 'Tech Solutions Ltda', phone: '11987654321', email: 'contato@techsolutions.com', tags: ['VIP'], total_revenue: 85000, created_at: '2025-02-15' },
-  { id: '3', name: 'InnovateBR', phone: '11933332222', email: 'contato@innovate.com', tags: ['Recorrente'], total_revenue: 42000, created_at: '2025-03-01' },
-];
+import { useClients } from '@/hooks/use-leads';
 
 const tagColors: Record<string, string> = {
   VIP: 'bg-warning/10 text-warning border-warning/20',
@@ -21,19 +14,27 @@ const tagColors: Record<string, string> = {
 };
 
 export default function ClientsPage() {
+  const { data: clients, isLoading } = useClients();
   const [search, setSearch] = useState('');
-  const filtered = mockClients.filter(c =>
+
+  const allClients = clients || [];
+  const filtered = allClients.filter(c =>
     c.name.toLowerCase().includes(search.toLowerCase()) ||
-    c.email.toLowerCase().includes(search.toLowerCase())
+    (c.email || '').toLowerCase().includes(search.toLowerCase())
   );
+
+  const totalRevenue = allClients.reduce((s, c) => s + Number(c.total_revenue), 0);
+  const vipCount = allClients.filter(c => (c.tags || []).includes('VIP')).length;
+
+  if (isLoading) {
+    return <div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Clientes</h1>
-          <p className="text-muted-foreground text-sm">Leads convertidos (pós-venda)</p>
-        </div>
+      <div>
+        <h1 className="text-2xl font-bold text-foreground">Clientes</h1>
+        <p className="text-muted-foreground text-sm">Leads convertidos (pós-venda)</p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -43,7 +44,7 @@ export default function ClientsPage() {
               <UserCheck className="h-5 w-5 text-primary" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-foreground">{mockClients.length}</p>
+              <p className="text-2xl font-bold text-foreground">{allClients.length}</p>
               <p className="text-xs text-muted-foreground">Total de Clientes</p>
             </div>
           </CardContent>
@@ -54,7 +55,7 @@ export default function ClientsPage() {
               <DollarSign className="h-5 w-5 text-success" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-foreground">{formatCurrency(mockClients.reduce((s, c) => s + c.total_revenue, 0))}</p>
+              <p className="text-2xl font-bold text-foreground">{formatCurrency(totalRevenue)}</p>
               <p className="text-xs text-muted-foreground">Receita Total</p>
             </div>
           </CardContent>
@@ -65,7 +66,7 @@ export default function ClientsPage() {
               <UserCheck className="h-5 w-5 text-warning" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-foreground">{mockClients.filter(c => c.tags.includes('VIP')).length}</p>
+              <p className="text-2xl font-bold text-foreground">{vipCount}</p>
               <p className="text-xs text-muted-foreground">Clientes VIP</p>
             </div>
           </CardContent>
@@ -92,19 +93,21 @@ export default function ClientsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((client) => (
+              {filtered.length === 0 ? (
+                <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Nenhum cliente encontrado.</TableCell></TableRow>
+              ) : filtered.map((client) => (
                 <TableRow key={client.id} className="hover:bg-muted/30 cursor-pointer">
                   <TableCell className="font-medium">{client.name}</TableCell>
                   <TableCell className="hidden md:table-cell text-muted-foreground">{client.phone}</TableCell>
                   <TableCell className="hidden md:table-cell text-muted-foreground">{client.email}</TableCell>
                   <TableCell>
                     <div className="flex gap-1 flex-wrap">
-                      {client.tags.map(tag => (
+                      {(client.tags || []).map(tag => (
                         <Badge key={tag} variant="outline" className={`text-[10px] ${tagColors[tag] || ''}`}>{tag}</Badge>
                       ))}
                     </div>
                   </TableCell>
-                  <TableCell className="font-semibold text-success">{formatCurrency(client.total_revenue)}</TableCell>
+                  <TableCell className="font-semibold text-success">{formatCurrency(Number(client.total_revenue))}</TableCell>
                   <TableCell className="hidden lg:table-cell text-muted-foreground">{formatDate(client.created_at)}</TableCell>
                 </TableRow>
               ))}
