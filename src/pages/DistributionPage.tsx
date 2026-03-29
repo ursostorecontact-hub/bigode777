@@ -92,7 +92,7 @@ export default function DistributionPage() {
                   )}
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-2 text-center">
+              <div className="grid grid-cols-3 gap-2 text-center">
                 <div className="bg-muted/50 rounded-lg p-2">
                   <p className="text-lg font-bold text-foreground">{sp.leads}</p>
                   <p className="text-[10px] text-muted-foreground">Leads ativos</p>
@@ -100,6 +100,10 @@ export default function DistributionPage() {
                 <div className="bg-success/10 rounded-lg p-2">
                   <p className="text-lg font-bold text-success">{sp.closed}</p>
                   <p className="text-[10px] text-muted-foreground">Fechados/mês</p>
+                </div>
+                <div className="bg-primary/10 rounded-lg p-2">
+                  <p className="text-lg font-bold text-primary">{sp.conversionRate}%</p>
+                  <p className="text-[10px] text-muted-foreground">Conversão</p>
                 </div>
               </div>
             </CardContent>
