@@ -32,6 +32,7 @@ export function useProfiles() {
 }
 
 export function useProfilesWithRoles() {
+  const { user } = useAuth();
   return useQuery({
     queryKey: ['profiles-with-roles'],
     queryFn: async () => {
@@ -46,6 +47,7 @@ export function useProfilesWithRoles() {
         role: rolesRes.data?.find(r => r.user_id === p.id)?.role || 'salesperson',
       }));
     },
+    enabled: !!user,
   });
 }
 
@@ -215,6 +217,7 @@ export function useLeadSources() {
 }
 
 export function useSettings() {
+  const { user } = useAuth();
   return useQuery({
     queryKey: ['settings'],
     queryFn: async () => {
@@ -222,6 +225,7 @@ export function useSettings() {
       if (error && error.code !== 'PGRST116') throw error;
       return data;
     },
+    enabled: !!user,
   });
 }
 
