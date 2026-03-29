@@ -12,12 +12,14 @@ import { Switch } from '@/components/ui/switch';
 import { useSettings, useUpdateSettings, useProfilesWithRoles } from '@/hooks/use-leads';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function SettingsPage() {
   const { data: settings, isLoading: settingsLoading } = useSettings();
   const { data: users, isLoading: usersLoading, refetch: refetchUsers } = useProfilesWithRoles();
   const updateSettings = useUpdateSettings();
   const { toast } = useToast();
+  const { user } = useAuth();
 
   const [companyName, setCompanyName] = useState('');
   const [webhookUrl, setWebhookUrl] = useState('');
@@ -164,22 +166,24 @@ export default function SettingsPage() {
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
-            {(users || []).map((user) => (
-              <div key={user.id} className={`flex items-center justify-between p-3 rounded-lg ${user.active ? 'bg-muted/30' : 'bg-destructive/10 opacity-60'}`}>
+            {(users || []).map((member) => (
+              <div key={member.id} className={`flex items-center justify-between p-3 rounded-lg ${member.active ? 'bg-muted/30' : 'bg-destructive/10 opacity-60'}`}>
                 <div>
-                  <p className="font-medium text-sm text-foreground">{user.full_name}</p>
-                  <p className="text-xs text-muted-foreground">{user.email}</p>
+                  <p className="font-medium text-sm text-foreground">{member.full_name}</p>
+                  <p className="text-xs text-muted-foreground">{member.email}</p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <Badge variant="secondary" className="capitalize text-xs">{roleLabels[user.role] || user.role}</Badge>
+                  <Badge variant="secondary" className="capitalize text-xs">{roleLabels[member.role] || member.role}</Badge>
                   <div className="flex items-center gap-2">
-                    <Switch
-                      checked={user.active}
-                      onCheckedChange={() => handleToggleActive(user.id, user.active)}
-                      aria-label={user.active ? 'Desativar usuário' : 'Ativar usuário'}
-                    />
-                    <span className={`text-xs font-medium ${user.active ? 'text-green-600' : 'text-destructive'}`}>
-                      {user.active ? 'Ativo' : 'Inativo'}
+                    {user?.id !== member.id ? (
+                      <Switch
+                        checked={member.active}
+                        onCheckedChange={() => handleToggleActive(member.id, member.active)}
+                        aria-label={member.active ? 'Desativar usuário' : 'Ativar usuário'}
+                      />
+                    ) : null}
+                    <span className={`text-xs font-medium ${member.active ? 'text-green-600' : 'text-destructive'}`}>
+                      {member.active ? 'Ativo' : 'Inativo'}
                     </span>
                   </div>
                 </div>
