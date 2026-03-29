@@ -14,6 +14,7 @@ import TasksPage from "@/pages/TasksPage";
 import ReportsPage from "@/pages/ReportsPage";
 import DistributionPage from "@/pages/DistributionPage";
 import SettingsPage from "@/pages/SettingsPage";
+import AutomationsPage from "@/pages/AutomationsPage";
 import HelpPage from "@/pages/HelpPage";
 import NotFound from "@/pages/NotFound";
 
@@ -58,6 +59,7 @@ function AppRoutes() {
       <Route path="/tarefas" element={<ProtectedRoute><TasksPage /></ProtectedRoute>} />
       <Route path="/relatorios" element={<ProtectedRoute><ReportsPage /></ProtectedRoute>} />
       <Route path="/configuracoes" element={<ProtectedRoute roles={['admin']}><SettingsPage /></ProtectedRoute>} />
+      <Route path="/automacoes" element={<ProtectedRoute roles={['admin']}><AutomationsPage /></ProtectedRoute>} />
       <Route path="/ajuda" element={<ProtectedRoute><HelpPage /></ProtectedRoute>} />
       <Route path="*" element={<NotFound />} />
     </Routes>

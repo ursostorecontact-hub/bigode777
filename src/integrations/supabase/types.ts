@@ -14,6 +14,42 @@ export type Database = {
   }
   public: {
     Tables: {
+      automations: {
+        Row: {
+          action_type: string
+          active: boolean
+          config: Json
+          created_at: string
+          id: string
+          inactive_days: number | null
+          message_template: string | null
+          name: string
+          trigger_type: string
+        }
+        Insert: {
+          action_type: string
+          active?: boolean
+          config?: Json
+          created_at?: string
+          id?: string
+          inactive_days?: number | null
+          message_template?: string | null
+          name: string
+          trigger_type: string
+        }
+        Update: {
+          action_type?: string
+          active?: boolean
+          config?: Json
+          created_at?: string
+          id?: string
+          inactive_days?: number | null
+          message_template?: string | null
+          name?: string
+          trigger_type?: string
+        }
+        Relationships: []
+      }
       clients: {
         Row: {
           created_at: string

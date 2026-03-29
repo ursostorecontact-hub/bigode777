@@ -26,6 +26,7 @@ import {
   HelpCircle,
   Share2,
   LogOut,
+  Zap,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -40,6 +41,7 @@ const mainNav = [
 ];
 
 const bottomNav = [
+  { title: 'Automações', url: '/automacoes', icon: Zap, roles: ['admin'] },
   { title: 'Configurações', url: '/configuracoes', icon: Settings, roles: ['admin'] },
   { title: 'Ajuda', url: '/ajuda', icon: HelpCircle },
 ];
