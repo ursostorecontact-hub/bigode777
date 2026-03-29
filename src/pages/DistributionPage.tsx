@@ -1,13 +1,14 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Users, ArrowRight, AlertTriangle, Loader2 } from 'lucide-react';
+import { Users, ArrowRight, AlertTriangle, Loader2, Shuffle, BarChart3 } from 'lucide-react';
 import { useLeads, useProfiles, useUpdateLead } from '@/hooks/use-leads';
 import { formatCurrency } from '@/types/crm';
 import { useToast } from '@/hooks/use-toast';
-import { useState } from 'react';
+
+type DistributionMode = 'manual' | 'round-robin' | 'capacity';
 
 export default function DistributionPage() {
   const { data: leads, isLoading } = useLeads();
@@ -15,13 +16,14 @@ export default function DistributionPage() {
   const updateLead = useUpdateLead();
   const { toast } = useToast();
   const [assignments, setAssignments] = useState<Record<string, string>>({});
+  const [mode, setMode] = useState<DistributionMode>('manual');
+  const [distributing, setDistributing] = useState(false);
 
   const allLeads = leads || [];
   const allProfiles = profiles || [];
 
   const unassigned = allLeads.filter(l => !l.assigned_to && l.status !== 'ganho' && l.status !== 'perdido');
 
-  // Stats per salesperson
   const salespeople = allProfiles.map(p => {
     const assigned = allLeads.filter(l => l.assigned_to === p.id && l.status !== 'ganho' && l.status !== 'perdido');
     const closedThisMonth = allLeads.filter(l => {
@@ -52,6 +54,49 @@ export default function DistributionPage() {
     setAssignments(a => { const c = { ...a }; delete c[leadId]; return c; });
   };
 
+  const handleAutoDistribute = async () => {
+    if (unassigned.length === 0 || allProfiles.length === 0) {
+      toast({ title: 'Nenhum lead para distribuir', variant: 'destructive' });
+      return;
+    }
+
+    setDistributing(true);
+
+    try {
+      if (mode === 'round-robin') {
+        // Round-robin: distribute evenly in order
+        for (let i = 0; i < unassigned.length; i++) {
+          const profileIndex = i % allProfiles.length;
+          await updateLead.mutateAsync({
+            id: unassigned[i].id,
+            assigned_to: allProfiles[profileIndex].id,
+          });
+        }
+        toast({ title: `${unassigned.length} leads distribuídos por Round-Robin!` });
+      } else if (mode === 'capacity') {
+        // Capacity: assign to the person with fewest active leads
+        const loadMap: Record<string, number> = {};
+        allProfiles.forEach(p => {
+          loadMap[p.id] = allLeads.filter(l => l.assigned_to === p.id && l.status !== 'ganho' && l.status !== 'perdido').length;
+        });
+
+        for (const lead of unassigned) {
+          // Find the person with least load
+          const minId = allProfiles.reduce((best, p) =>
+            (loadMap[p.id] ?? 0) < (loadMap[best.id] ?? 0) ? p : best
+          ).id;
+          await updateLead.mutateAsync({ id: lead.id, assigned_to: minId });
+          loadMap[minId] = (loadMap[minId] || 0) + 1;
+        }
+        toast({ title: `${unassigned.length} leads distribuídos por Capacidade!` });
+      }
+    } catch {
+      toast({ title: 'Erro ao distribuir leads', variant: 'destructive' });
+    } finally {
+      setDistributing(false);
+    }
+  };
+
   if (isLoading) {
     return <div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   }
@@ -63,16 +108,34 @@ export default function DistributionPage() {
           <h1 className="text-2xl font-bold text-foreground">Distribuição de Leads</h1>
           <p className="text-muted-foreground text-sm">Distribua leads entre a equipe de vendas</p>
         </div>
-        <Select defaultValue="manual">
-          <SelectTrigger className="w-48">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="manual">Manual</SelectItem>
-            <SelectItem value="round-robin">Round-Robin</SelectItem>
-            <SelectItem value="capacity">Por Capacidade</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-2">
+          <Select value={mode} onValueChange={(v) => setMode(v as DistributionMode)}>
+            <SelectTrigger className="w-48">
+              <SelectValue placeholder="Modo de distribuição" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="manual">Manual</SelectItem>
+              <SelectItem value="round-robin">Round-Robin</SelectItem>
+              <SelectItem value="capacity">Por Capacidade</SelectItem>
+            </SelectContent>
+          </Select>
+          {mode !== 'manual' && unassigned.length > 0 && (
+            <Button
+              onClick={handleAutoDistribute}
+              disabled={distributing}
+              className="gap-2"
+            >
+              {distributing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : mode === 'round-robin' ? (
+                <Shuffle className="h-4 w-4" />
+              ) : (
+                <BarChart3 className="h-4 w-4" />
+              )}
+              Distribuir ({unassigned.length})
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -114,6 +177,22 @@ export default function DistributionPage() {
         )}
       </div>
 
+      {mode !== 'manual' && unassigned.length > 0 && (
+        <Card className="border-primary/20 bg-primary/5">
+          <CardContent className="p-4">
+            <p className="text-sm text-foreground">
+              <strong>Modo {mode === 'round-robin' ? 'Round-Robin' : 'Por Capacidade'}:</strong>{' '}
+              {mode === 'round-robin'
+                ? 'Os leads serão distribuídos igualmente entre todos os vendedores, um a um.'
+                : 'Os leads serão atribuídos ao vendedor com menos leads ativos no momento.'}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Clique em "Distribuir" acima para atribuir automaticamente {unassigned.length} lead(s).
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardContent className="p-5">
           <div className="flex items-center gap-2 mb-4">
@@ -130,19 +209,21 @@ export default function DistributionPage() {
                     <p className="font-medium text-sm text-foreground">{lead.name}</p>
                     <p className="text-xs text-muted-foreground">{lead.source} · {formatCurrency(Number(lead.value))}</p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Select value={assignments[lead.id] || ''} onValueChange={v => setAssignments(a => ({ ...a, [lead.id]: v }))}>
-                      <SelectTrigger className="w-36 h-8 text-xs">
-                        <SelectValue placeholder="Atribuir a..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {allProfiles.map(sp => <SelectItem key={sp.id} value={sp.id}>{sp.full_name}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                    <Button size="sm" variant="outline" className="h-8" onClick={() => handleAssign(lead.id)} disabled={!assignments[lead.id]}>
-                      <ArrowRight className="h-3 w-3" />
-                    </Button>
-                  </div>
+                  {mode === 'manual' && (
+                    <div className="flex items-center gap-2">
+                      <Select value={assignments[lead.id] || ''} onValueChange={v => setAssignments(a => ({ ...a, [lead.id]: v }))}>
+                        <SelectTrigger className="w-36 h-8 text-xs">
+                          <SelectValue placeholder="Atribuir a..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {allProfiles.map(sp => <SelectItem key={sp.id} value={sp.id}>{sp.full_name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      <Button size="sm" variant="outline" className="h-8" onClick={() => handleAssign(lead.id)} disabled={!assignments[lead.id]}>
+                        <ArrowRight className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
