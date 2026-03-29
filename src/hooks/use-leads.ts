@@ -89,9 +89,9 @@ export function useUpdateLead() {
     mutationFn: async ({ id, ...updates }: { id: string; [key: string]: any }) => {
       const { error } = await supabase.from('leads').update(updates).eq('id', id);
       if (error) throw error;
-      return { id, ...updates };
+      return { id, ...updates } as Record<string, any>;
     },
-    onSuccess: (data) => {
+    onSuccess: (data: Record<string, any>) => {
       qc.invalidateQueries({ queryKey: ['leads'] });
       // Trigger pipeline change automation
       if (data && data.pipeline_stage) {
