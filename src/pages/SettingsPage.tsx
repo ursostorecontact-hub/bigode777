@@ -166,24 +166,24 @@ export default function SettingsPage() {
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
-            {(users || []).map((user) => (
-              <div key={user.id} className={`flex items-center justify-between p-3 rounded-lg ${user.active ? 'bg-muted/30' : 'bg-destructive/10 opacity-60'}`}>
+            {(users || []).map((member) => (
+              <div key={member.id} className={`flex items-center justify-between p-3 rounded-lg ${member.active ? 'bg-muted/30' : 'bg-destructive/10 opacity-60'}`}>
                 <div>
-                  <p className="font-medium text-sm text-foreground">{user.full_name}</p>
-                  <p className="text-xs text-muted-foreground">{user.email}</p>
+                  <p className="font-medium text-sm text-foreground">{member.full_name}</p>
+                  <p className="text-xs text-muted-foreground">{member.email}</p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <Badge variant="secondary" className="capitalize text-xs">{roleLabels[user.role] || user.role}</Badge>
+                  <Badge variant="secondary" className="capitalize text-xs">{roleLabels[member.role] || member.role}</Badge>
                   <div className="flex items-center gap-2">
-                    {user?.id !== user_item_id ? (
+                    {user?.id !== member.id ? (
                       <Switch
-                        checked={user_item.active}
-                        onCheckedChange={() => handleToggleActive(user_item.id, user_item.active)}
-                        aria-label={user_item.active ? 'Desativar usuário' : 'Ativar usuário'}
+                        checked={member.active}
+                        onCheckedChange={() => handleToggleActive(member.id, member.active)}
+                        aria-label={member.active ? 'Desativar usuário' : 'Ativar usuário'}
                       />
                     ) : null}
-                    <span className={`text-xs font-medium ${user.active ? 'text-green-600' : 'text-destructive'}`}>
-                      {user.active ? 'Ativo' : 'Inativo'}
+                    <span className={`text-xs font-medium ${member.active ? 'text-green-600' : 'text-destructive'}`}>
+                      {member.active ? 'Ativo' : 'Inativo'}
                     </span>
                   </div>
                 </div>
