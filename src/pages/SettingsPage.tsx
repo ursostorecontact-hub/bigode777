@@ -103,6 +103,24 @@ export default function SettingsPage() {
     }
   };
 
+  const handleToggleActive = async (userId: string, currentActive: boolean) => {
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/toggle-user-active`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ user_id: userId, active: !currentActive }),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error);
+      toast({ title: currentActive ? 'Usuário desativado' : 'Usuário reativado' });
+      refetchUsers();
+    } catch (err: any) {
+      toast({ title: 'Erro', description: err.message, variant: 'destructive' });
+    }
+  };
+
   const roleLabels: Record<string, string> = { admin: 'Admin', manager: 'Gerente', salesperson: 'Vendedor' };
 
   if (settingsLoading || usersLoading) {
@@ -147,16 +165,23 @@ export default function SettingsPage() {
         <CardContent>
           <div className="space-y-3">
             {(users || []).map((user) => (
-              <div key={user.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
+              <div key={user.id} className={`flex items-center justify-between p-3 rounded-lg ${user.active ? 'bg-muted/30' : 'bg-destructive/10 opacity-60'}`}>
                 <div>
                   <p className="font-medium text-sm text-foreground">{user.full_name}</p>
                   <p className="text-xs text-muted-foreground">{user.email}</p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-3">
                   <Badge variant="secondary" className="capitalize text-xs">{roleLabels[user.role] || user.role}</Badge>
-                  <Badge variant={user.active ? 'default' : 'destructive'} className={`text-xs ${user.active ? 'bg-success text-success-foreground' : ''}`}>
-                    {user.active ? 'Ativo' : 'Inativo'}
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      checked={user.active}
+                      onCheckedChange={() => handleToggleActive(user.id, user.active)}
+                      aria-label={user.active ? 'Desativar usuário' : 'Ativar usuário'}
+                    />
+                    <span className={`text-xs font-medium ${user.active ? 'text-green-600' : 'text-destructive'}`}>
+                      {user.active ? 'Ativo' : 'Inativo'}
+                    </span>
+                  </div>
                 </div>
               </div>
             ))}
