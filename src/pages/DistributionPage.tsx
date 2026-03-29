@@ -30,12 +30,16 @@ export default function DistributionPage() {
       const now = new Date();
       return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
     });
+    const totalAssignedEver = allLeads.filter(l => l.assigned_to === p.id).length;
+    const totalWon = allLeads.filter(l => l.assigned_to === p.id && l.status === 'ganho').length;
+    const conversionRate = totalAssignedEver > 0 ? Math.round((totalWon / totalAssignedEver) * 100) : 0;
     const initials = p.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
     return {
       id: p.id,
       name: p.full_name,
       leads: assigned.length,
       closed: closedThisMonth.length,
+      conversionRate,
       avatar: initials,
     };
   });
