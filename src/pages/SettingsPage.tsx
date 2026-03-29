@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Building2, Users, Link, Key, Loader2, UserPlus, Power } from 'lucide-react';
+import { Building2, Users, Link, Key, Loader2, UserPlus, Trash2 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { useSettings, useUpdateSettings, useProfilesWithRoles } from '@/hooks/use-leads';
 import { useToast } from '@/hooks/use-toast';
@@ -123,6 +123,25 @@ export default function SettingsPage() {
     }
   };
 
+  const handleDeleteUser = async (userId: string, userName: string) => {
+    if (!confirm(`Tem certeza que deseja remover "${userName}"? Esta ação não pode ser desfeita.`)) return;
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-user`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ user_id: userId }),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error);
+      toast({ title: 'Usuário removido com sucesso' });
+      refetchUsers();
+    } catch (err: any) {
+      toast({ title: 'Erro ao remover', description: err.message, variant: 'destructive' });
+    }
+  };
+
   const roleLabels: Record<string, string> = { admin: 'Admin', manager: 'Gerente', salesperson: 'Vendedor' };
 
   if (settingsLoading || usersLoading) {
@@ -176,11 +195,22 @@ export default function SettingsPage() {
                   <Badge variant="secondary" className="capitalize text-xs">{roleLabels[member.role] || member.role}</Badge>
                   <div className="flex items-center gap-2">
                     {user?.id !== member.id ? (
-                      <Switch
-                        checked={member.active}
-                        onCheckedChange={() => handleToggleActive(member.id, member.active)}
-                        aria-label={member.active ? 'Desativar usuário' : 'Ativar usuário'}
-                      />
+                      <>
+                        <Switch
+                          checked={member.active}
+                          onCheckedChange={() => handleToggleActive(member.id, member.active)}
+                          aria-label={member.active ? 'Desativar usuário' : 'Ativar usuário'}
+                        />
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
+                          onClick={() => handleDeleteUser(member.id, member.full_name)}
+                          aria-label="Remover usuário"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </>
                     ) : null}
                     <span className={`text-xs font-medium ${member.active ? 'text-green-600' : 'text-destructive'}`}>
                       {member.active ? 'Ativo' : 'Inativo'}
