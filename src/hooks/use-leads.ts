@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import type { LeadStatus } from '@/types/crm';
 import { useToast } from '@/hooks/use-toast';
+import { triggerAutomation } from '@/hooks/use-automations';
 
 export function useLeads() {
   const { user } = useAuth();
@@ -69,9 +70,11 @@ export function useCreateLead() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ['leads'] });
       toast({ title: 'Lead criado com sucesso!' });
+      // Trigger automation
+      if (data) triggerAutomation('lead_created', data);
     },
     onError: () => {
       toast({ title: 'Erro ao criar lead', variant: 'destructive' });
@@ -86,9 +89,14 @@ export function useUpdateLead() {
     mutationFn: async ({ id, ...updates }: { id: string; [key: string]: any }) => {
       const { error } = await supabase.from('leads').update(updates).eq('id', id);
       if (error) throw error;
+      return { id, ...updates };
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ['leads'] });
+      // Trigger pipeline change automation
+      if (data && data.pipeline_stage) {
+        triggerAutomation('pipeline_changed', data, { new_stage: data.pipeline_stage });
+      }
     },
     onError: () => {
       toast({ title: 'Erro ao atualizar lead', variant: 'destructive' });
