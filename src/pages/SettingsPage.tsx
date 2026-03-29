@@ -12,12 +12,14 @@ import { Switch } from '@/components/ui/switch';
 import { useSettings, useUpdateSettings, useProfilesWithRoles } from '@/hooks/use-leads';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function SettingsPage() {
   const { data: settings, isLoading: settingsLoading } = useSettings();
   const { data: users, isLoading: usersLoading, refetch: refetchUsers } = useProfilesWithRoles();
   const updateSettings = useUpdateSettings();
   const { toast } = useToast();
+  const { user } = useAuth();
 
   const [companyName, setCompanyName] = useState('');
   const [webhookUrl, setWebhookUrl] = useState('');
