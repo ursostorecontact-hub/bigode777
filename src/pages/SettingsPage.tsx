@@ -175,11 +175,13 @@ export default function SettingsPage() {
                 <div className="flex items-center gap-3">
                   <Badge variant="secondary" className="capitalize text-xs">{roleLabels[user.role] || user.role}</Badge>
                   <div className="flex items-center gap-2">
-                    <Switch
-                      checked={user.active}
-                      onCheckedChange={() => handleToggleActive(user.id, user.active)}
-                      aria-label={user.active ? 'Desativar usuário' : 'Ativar usuário'}
-                    />
+                    {user?.id !== user_item_id ? (
+                      <Switch
+                        checked={user_item.active}
+                        onCheckedChange={() => handleToggleActive(user_item.id, user_item.active)}
+                        aria-label={user_item.active ? 'Desativar usuário' : 'Ativar usuário'}
+                      />
+                    ) : null}
                     <span className={`text-xs font-medium ${user.active ? 'text-green-600' : 'text-destructive'}`}>
                       {user.active ? 'Ativo' : 'Inativo'}
                     </span>
