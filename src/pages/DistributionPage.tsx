@@ -1,14 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Users, ArrowRight, AlertTriangle, Loader2, Shuffle, BarChart3 } from 'lucide-react';
+import { Slider } from '@/components/ui/slider';
+import { Users, ArrowRight, AlertTriangle, Loader2, Shuffle, BarChart3, Percent } from 'lucide-react';
 import { useLeads, useProfiles, useUpdateLead } from '@/hooks/use-leads';
 import { formatCurrency } from '@/types/crm';
 import { useToast } from '@/hooks/use-toast';
 
-type DistributionMode = 'manual' | 'round-robin' | 'capacity';
+type DistributionMode = 'manual' | 'round-robin' | 'capacity' | 'percentage';
 
 export default function DistributionPage() {
   const { data: leads, isLoading } = useLeads();
@@ -18,11 +19,27 @@ export default function DistributionPage() {
   const [assignments, setAssignments] = useState<Record<string, string>>({});
   const [mode, setMode] = useState<DistributionMode>('manual');
   const [distributing, setDistributing] = useState(false);
+  const [percentages, setPercentages] = useState<Record<string, number>>({});
 
   const allLeads = leads || [];
   const allProfiles = profiles || [];
 
   const unassigned = allLeads.filter(l => !l.assigned_to && l.status !== 'ganho' && l.status !== 'perdido');
+
+  // Initialize percentages when profiles load
+  useMemo(() => {
+    if (allProfiles.length > 0 && Object.keys(percentages).length === 0) {
+      const equal = Math.floor(100 / allProfiles.length);
+      const remainder = 100 - equal * allProfiles.length;
+      const init: Record<string, number> = {};
+      allProfiles.forEach((p, i) => {
+        init[p.id] = equal + (i === 0 ? remainder : 0);
+      });
+      setPercentages(init);
+    }
+  }, [allProfiles]);
+
+  const totalPercentage = Object.values(percentages).reduce((s, v) => s + v, 0);
 
   const salespeople = allProfiles.map(p => {
     const assigned = allLeads.filter(l => l.assigned_to === p.id && l.status !== 'ganho' && l.status !== 'perdido');
@@ -54,9 +71,18 @@ export default function DistributionPage() {
     setAssignments(a => { const c = { ...a }; delete c[leadId]; return c; });
   };
 
+  const handlePercentageChange = (profileId: string, value: number[]) => {
+    setPercentages(prev => ({ ...prev, [profileId]: value[0] }));
+  };
+
   const handleAutoDistribute = async () => {
     if (unassigned.length === 0 || allProfiles.length === 0) {
       toast({ title: 'Nenhum lead para distribuir', variant: 'destructive' });
+      return;
+    }
+
+    if (mode === 'percentage' && totalPercentage !== 100) {
+      toast({ title: `O total deve ser 100% (atual: ${totalPercentage}%)`, variant: 'destructive' });
       return;
     }
 
@@ -64,7 +90,6 @@ export default function DistributionPage() {
 
     try {
       if (mode === 'round-robin') {
-        // Round-robin: distribute evenly in order
         for (let i = 0; i < unassigned.length; i++) {
           const profileIndex = i % allProfiles.length;
           await updateLead.mutateAsync({
@@ -74,14 +99,11 @@ export default function DistributionPage() {
         }
         toast({ title: `${unassigned.length} leads distribuídos por Round-Robin!` });
       } else if (mode === 'capacity') {
-        // Capacity: assign to the person with fewest active leads
         const loadMap: Record<string, number> = {};
         allProfiles.forEach(p => {
           loadMap[p.id] = allLeads.filter(l => l.assigned_to === p.id && l.status !== 'ganho' && l.status !== 'perdido').length;
         });
-
         for (const lead of unassigned) {
-          // Find the person with least load
           const minId = allProfiles.reduce((best, p) =>
             (loadMap[p.id] ?? 0) < (loadMap[best.id] ?? 0) ? p : best
           ).id;
@@ -89,6 +111,40 @@ export default function DistributionPage() {
           loadMap[minId] = (loadMap[minId] || 0) + 1;
         }
         toast({ title: `${unassigned.length} leads distribuídos por Capacidade!` });
+      } else if (mode === 'percentage') {
+        // Distribute leads proportionally based on percentages
+        const sortedProfiles = allProfiles
+          .map(p => ({ id: p.id, pct: percentages[p.id] || 0 }))
+          .filter(p => p.pct > 0);
+
+        if (sortedProfiles.length === 0) {
+          toast({ title: 'Defina % para ao menos um vendedor', variant: 'destructive' });
+          return;
+        }
+
+        // Calculate how many leads each person gets
+        const totalLeads = unassigned.length;
+        let distributed = 0;
+        const allocation: { id: string; count: number }[] = [];
+
+        sortedProfiles.forEach((sp, i) => {
+          const isLast = i === sortedProfiles.length - 1;
+          const count = isLast ? totalLeads - distributed : Math.round((sp.pct / 100) * totalLeads);
+          allocation.push({ id: sp.id, count });
+          distributed += count;
+        });
+
+        let leadIndex = 0;
+        for (const alloc of allocation) {
+          for (let i = 0; i < alloc.count && leadIndex < totalLeads; i++) {
+            await updateLead.mutateAsync({
+              id: unassigned[leadIndex].id,
+              assigned_to: alloc.id,
+            });
+            leadIndex++;
+          }
+        }
+        toast({ title: `${unassigned.length} leads distribuídos por Porcentagem!` });
       }
     } catch {
       toast({ title: 'Erro ao distribuir leads', variant: 'destructive' });
@@ -100,6 +156,12 @@ export default function DistributionPage() {
   if (isLoading) {
     return <div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   }
+
+  const modeDescriptions: Record<string, string> = {
+    'round-robin': 'Os leads serão distribuídos igualmente entre todos os vendedores, um a um.',
+    capacity: 'Os leads serão atribuídos ao vendedor com menos leads ativos no momento.',
+    percentage: 'Ajuste os sliders para definir a % de leads que cada vendedor receberá. O total deve ser 100%.',
+  };
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -117,18 +179,21 @@ export default function DistributionPage() {
               <SelectItem value="manual">Manual</SelectItem>
               <SelectItem value="round-robin">Round-Robin</SelectItem>
               <SelectItem value="capacity">Por Capacidade</SelectItem>
+              <SelectItem value="percentage">Por Porcentagem</SelectItem>
             </SelectContent>
           </Select>
           {mode !== 'manual' && unassigned.length > 0 && (
             <Button
               onClick={handleAutoDistribute}
-              disabled={distributing}
+              disabled={distributing || (mode === 'percentage' && totalPercentage !== 100)}
               className="gap-2"
             >
               {distributing ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : mode === 'round-robin' ? (
                 <Shuffle className="h-4 w-4" />
+              ) : mode === 'percentage' ? (
+                <Percent className="h-4 w-4" />
               ) : (
                 <BarChart3 className="h-4 w-4" />
               )}
@@ -138,6 +203,7 @@ export default function DistributionPage() {
         </div>
       </div>
 
+      {/* Salesperson cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {salespeople.map((sp) => (
           <Card key={sp.id} className={`transition-all hover:shadow-md ${sp.leads > 20 ? 'border-destructive/30' : ''}`}>
@@ -169,6 +235,29 @@ export default function DistributionPage() {
                   <p className="text-[10px] text-muted-foreground">Conversão</p>
                 </div>
               </div>
+
+              {/* Percentage slider */}
+              {mode === 'percentage' && (
+                <div className="mt-3 pt-3 border-t border-border">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs text-muted-foreground">Porcentagem</span>
+                    <span className={`text-sm font-bold ${totalPercentage === 100 ? 'text-success' : 'text-warning'}`}>
+                      {percentages[sp.id] || 0}%
+                    </span>
+                  </div>
+                  <Slider
+                    value={[percentages[sp.id] || 0]}
+                    onValueChange={(v) => handlePercentageChange(sp.id, v)}
+                    max={100}
+                    min={0}
+                    step={5}
+                    className="w-full"
+                  />
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    ≈ {Math.round(((percentages[sp.id] || 0) / 100) * unassigned.length)} leads
+                  </p>
+                </div>
+              )}
             </CardContent>
           </Card>
         ))}
@@ -177,14 +266,32 @@ export default function DistributionPage() {
         )}
       </div>
 
-      {mode !== 'manual' && unassigned.length > 0 && (
+      {/* Percentage total indicator */}
+      {mode === 'percentage' && salespeople.length > 0 && (
+        <Card className={`border-2 ${totalPercentage === 100 ? 'border-success/30 bg-success/5' : 'border-warning/30 bg-warning/5'}`}>
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-foreground">
+                Total: <span className={`text-lg font-bold ${totalPercentage === 100 ? 'text-success' : 'text-warning'}`}>{totalPercentage}%</span>
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {totalPercentage === 100
+                  ? '✅ Total correto! Pronto para distribuir.'
+                  : `⚠️ Ajuste os sliders para totalizar 100% (faltam ${100 - totalPercentage}%)`}
+              </p>
+            </div>
+            <p className="text-sm text-muted-foreground">{unassigned.length} leads para distribuir</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Mode description */}
+      {mode !== 'manual' && mode !== 'percentage' && unassigned.length > 0 && (
         <Card className="border-primary/20 bg-primary/5">
           <CardContent className="p-4">
             <p className="text-sm text-foreground">
               <strong>Modo {mode === 'round-robin' ? 'Round-Robin' : 'Por Capacidade'}:</strong>{' '}
-              {mode === 'round-robin'
-                ? 'Os leads serão distribuídos igualmente entre todos os vendedores, um a um.'
-                : 'Os leads serão atribuídos ao vendedor com menos leads ativos no momento.'}
+              {modeDescriptions[mode]}
             </p>
             <p className="text-xs text-muted-foreground mt-1">
               Clique em "Distribuir" acima para atribuir automaticamente {unassigned.length} lead(s).
@@ -193,6 +300,7 @@ export default function DistributionPage() {
         </Card>
       )}
 
+      {/* Unassigned leads */}
       <Card>
         <CardContent className="p-5">
           <div className="flex items-center gap-2 mb-4">
