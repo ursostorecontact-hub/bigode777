@@ -99,8 +99,8 @@ function WhatsAppSection() {
             <Card key={inst.id}>
               <CardContent className="flex items-center justify-between p-4">
                 <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-green-500/10">
-                    <MessageSquare className="h-4 w-4 text-green-600" />
+                  <div className="p-2 rounded-lg bg-primary/10">
+                    <MessageSquare className="h-4 w-4 text-primary" />
                   </div>
                   <div>
                     <p className="font-medium text-sm">{inst.name}</p>
@@ -217,7 +217,7 @@ function FacebookSection() {
           <CardContent className="p-4 space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Facebook className="h-5 w-5 text-blue-600" />
+                <Facebook className="h-5 w-5 text-primary" />
                 <span className="font-medium text-sm">{wh.page_name || 'Página sem nome'}</span>
                 <Badge variant={wh.active ? 'default' : 'secondary'} className="text-xs">
                   {wh.active ? 'Ativo' : 'Inativo'}
