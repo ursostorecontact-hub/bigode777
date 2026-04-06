@@ -94,6 +94,30 @@ export type Database = {
           },
         ]
       }
+      facebook_webhooks: {
+        Row: {
+          active: boolean
+          created_at: string
+          id: string
+          page_name: string
+          verify_token: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          page_name?: string
+          verify_token?: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          page_name?: string
+          verify_token?: string
+        }
+        Relationships: []
+      }
       interactions: {
         Row: {
           client_id: string | null
@@ -352,6 +376,36 @@ export type Database = {
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
+        }
+        Relationships: []
+      }
+      whatsapp_instances: {
+        Row: {
+          created_at: string
+          evolution_api_key: string
+          evolution_url: string
+          id: string
+          instance_name: string
+          name: string
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          evolution_api_key: string
+          evolution_url: string
+          id?: string
+          instance_name: string
+          name: string
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          evolution_api_key?: string
+          evolution_url?: string
+          id?: string
+          instance_name?: string
+          name?: string
+          status?: string
         }
         Relationships: []
       }

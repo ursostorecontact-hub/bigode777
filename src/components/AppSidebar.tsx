@@ -27,6 +27,7 @@ import {
   Share2,
   LogOut,
   Zap,
+  Plug,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -42,6 +43,7 @@ const mainNav = [
 
 const bottomNav = [
   { title: 'Automações', url: '/automacoes', icon: Zap, roles: ['admin'] },
+  { title: 'Integrações', url: '/integracoes', icon: Plug, roles: ['admin'] },
   { title: 'Configurações', url: '/configuracoes', icon: Settings, roles: ['admin'] },
   { title: 'Ajuda', url: '/ajuda', icon: HelpCircle },
 ];
