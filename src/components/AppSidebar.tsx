@@ -45,7 +45,7 @@ const mainNav = [
 const bottomNav = [
   { title: 'Automações', url: '/automacoes', icon: Zap, roles: ['admin'] },
   { title: 'Integrações', url: '/integracoes', icon: Plug, roles: ['admin'] },
-  { title: 'WhatsApp', url: '/whatsapp', icon: MessageSquare, roles: ['admin'] },
+  { title: 'WhatsApp', url: '/whatsapp', icon: MessageSquare },
   { title: 'Configurações', url: '/configuracoes', icon: Settings, roles: ['admin'] },
   { title: 'Ajuda', url: '/ajuda', icon: HelpCircle },
 ];
