@@ -6,7 +6,8 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { BarChart3, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
+import flashLogo from '@/assets/flash-logo.png';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -50,10 +51,10 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <div className="w-full max-w-md animate-fade-in">
         <div className="flex flex-col items-center mb-8">
-          <div className="h-14 w-14 rounded-2xl gradient-primary flex items-center justify-center mb-4">
-            <BarChart3 className="h-7 w-7 text-primary-foreground" />
+          <div className="h-14 w-14 rounded-2xl bg-background flex items-center justify-center mb-4">
+            <img src={flashLogo} alt="Flash CRMs" width={40} height={40} />
           </div>
-          <h1 className="text-2xl font-bold text-foreground"><h1 className="text-2xl font-bold text-foreground">Flash CRMs</h1></h1>
+          <h1 className="text-2xl font-bold text-foreground">Flash CRMs</h1>
           <p className="text-muted-foreground text-sm mt-1">Gerencie seus leads e vendas</p>
         </div>
 
