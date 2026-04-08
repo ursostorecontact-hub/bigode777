@@ -550,6 +550,12 @@ function MessageArea({
 
       {/* Input Bar */}
       <div className="p-3 border-t border-border bg-card">
+        {sending && (
+          <div className="flex items-center gap-2 mb-2 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span>Enviando mídia...</span>
+          </div>
+        )}
         {audio.recording ? (
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="icon" className="h-10 w-10 text-destructive" onClick={audio.cancel} title="Cancelar">
@@ -561,6 +567,7 @@ function MessageArea({
             </div>
             <Button
               onClick={handleAudioToggle}
+              disabled={sending}
               size="icon"
               className="h-10 w-10 shrink-0"
             >
@@ -568,13 +575,31 @@ function MessageArea({
             </Button>
           </div>
         ) : (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx"
+              className="hidden"
+              onChange={handleFileSelect}
+            />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-10 w-10 shrink-0"
+              onClick={() => fileInputRef.current?.click()}
+              title="Enviar foto, vídeo ou arquivo"
+              disabled={sending}
+            >
+              <Paperclip className="h-5 w-5" />
+            </Button>
             <Button
               variant="ghost"
               size="icon"
               className="h-10 w-10 shrink-0"
               onClick={handleAudioToggle}
               title="Gravar áudio"
+              disabled={sending}
             >
               <Mic className="h-5 w-5" />
             </Button>
@@ -584,11 +609,11 @@ function MessageArea({
               onKeyDown={handleKeyDown}
               placeholder="Digite uma mensagem..."
               className="flex-1"
-              disabled={sendMessage.isPending}
+              disabled={sendMessage.isPending || sending}
             />
             <Button
               onClick={handleSend}
-              disabled={!text.trim() || sendMessage.isPending}
+              disabled={!text.trim() || sendMessage.isPending || sending}
               size="icon"
               className="h-10 w-10 shrink-0"
             >
