@@ -203,6 +203,30 @@ function InstanceCard({ instance, profiles, onRefresh }: {
     qrInterval.current = setInterval(fetchQr, 30000);
   };
 
+  const fetchPairingCode = async () => {
+    if (!pairingPhone) {
+      toast({ title: 'Informe o número com DDD (ex: 5511999999999)', variant: 'destructive' });
+      return;
+    }
+    setPairingLoading(true);
+    try {
+      const result = await callWhatsAppQrcode({
+        action: 'pairing_code',
+        instance_id: instance.id,
+        phone: pairingPhone,
+      });
+      if (result.error) throw new Error(result.error);
+      if (result.pairingCode) {
+        setPairingCode(result.pairingCode);
+      } else {
+        toast({ title: 'Código não disponível, tente novamente', variant: 'destructive' });
+      }
+    } catch (err: any) {
+      toast({ title: 'Erro ao gerar código', description: err.message, variant: 'destructive' });
+    }
+    setPairingLoading(false);
+  };
+
   const handleDelete = async () => {
     if (!confirm(`Excluir instância "${instance.name}"?`)) return;
     setDeleting(true);
