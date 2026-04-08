@@ -171,7 +171,8 @@ Deno.serve(async (req) => {
         const altJid = chat.lastMessage?.key?.remoteJidAlt || "";
         const phoneJid = altJid.includes("@s.whatsapp.net") ? altJid : remoteJid;
         const contactPhone = phoneJid.split("@")[0];
-        const contactName = chat.pushName || chat.name || chat.contact || contactPhone;
+        // Resolve name: address book > pushName > chat name > phone
+        const contactName = contactMap[remoteJid] || contactMap[contactPhone] || chat.pushName || chat.name || chat.contact || contactPhone;
 
         // Upsert chat
         const { data: dbChat, error: chatErr } = await supabase
