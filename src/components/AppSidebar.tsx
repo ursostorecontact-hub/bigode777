@@ -39,13 +39,13 @@ import { Button } from '@/components/ui/button';
 
 const mainNav = [
   { title: 'Dashboard', url: '/dashboard', icon: LayoutDashboard },
-  { title: 'Leads', url: '/leads', icon: Users },
-  { title: 'Pipeline', url: '/pipeline', icon: Kanban },
   { title: 'Conversas', url: '/conversas', icon: MessageSquare },
-  { title: 'Distribuição', url: '/distribuicao', icon: Share2, roles: ['admin', 'manager'] },
-  { title: 'Clientes', url: '/clientes', icon: UserCheck },
+  { title: 'Leads', url: '/leads', icon: Users },
   { title: 'Tarefas', url: '/tarefas', icon: CheckSquare },
-  { title: 'Relatórios', url: '/relatorios', icon: BarChart3 },
+  { title: 'Pipeline', url: '/pipeline', icon: Kanban, roles: ['admin', 'manager'] },
+  { title: 'Clientes', url: '/clientes', icon: UserCheck, roles: ['admin', 'manager'] },
+  { title: 'Distribuição', url: '/distribuicao', icon: Share2, roles: ['admin', 'manager'] },
+  { title: 'Relatórios', url: '/relatorios', icon: BarChart3, roles: ['admin', 'manager'] },
   { title: 'Audiências Facebook', url: '/audiencias-facebook', icon: Target, roles: ['admin'] },
 ];
 

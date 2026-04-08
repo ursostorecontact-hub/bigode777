@@ -67,16 +67,16 @@ function AppRoutes() {
       {/* Protected routes */}
       <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
       <Route path="/leads" element={<ProtectedRoute><LeadsPage /></ProtectedRoute>} />
-      <Route path="/pipeline" element={<ProtectedRoute><PipelinePage /></ProtectedRoute>} />
-      <Route path="/distribuicao" element={<ProtectedRoute roles={['admin', 'manager']}><DistributionPage /></ProtectedRoute>} />
-      <Route path="/clientes" element={<ProtectedRoute><ClientsPage /></ProtectedRoute>} />
+      <Route path="/conversas" element={<ProtectedRoute><ConversationsPage /></ProtectedRoute>} />
       <Route path="/tarefas" element={<ProtectedRoute><TasksPage /></ProtectedRoute>} />
-      <Route path="/relatorios" element={<ProtectedRoute><ReportsPage /></ProtectedRoute>} />
+      <Route path="/pipeline" element={<ProtectedRoute roles={['admin', 'manager']}><PipelinePage /></ProtectedRoute>} />
+      <Route path="/clientes" element={<ProtectedRoute roles={['admin', 'manager']}><ClientsPage /></ProtectedRoute>} />
+      <Route path="/distribuicao" element={<ProtectedRoute roles={['admin', 'manager']}><DistributionPage /></ProtectedRoute>} />
+      <Route path="/relatorios" element={<ProtectedRoute roles={['admin', 'manager']}><ReportsPage /></ProtectedRoute>} />
       <Route path="/configuracoes" element={<ProtectedRoute roles={['admin']}><SettingsPage /></ProtectedRoute>} />
       <Route path="/automacoes" element={<ProtectedRoute roles={['admin']}><AutomationsPage /></ProtectedRoute>} />
       <Route path="/integracoes" element={<ProtectedRoute roles={['admin']}><IntegrationsPage /></ProtectedRoute>} />
       <Route path="/whatsapp" element={<ProtectedRoute roles={['admin']}><WhatsAppConnectionPage /></ProtectedRoute>} />
-      <Route path="/conversas" element={<ProtectedRoute><ConversationsPage /></ProtectedRoute>} />
       <Route path="/audiencias-facebook" element={<ProtectedRoute roles={['admin']}><FacebookAudiencesPage /></ProtectedRoute>} />
       <Route path="/ajuda" element={<ProtectedRoute><HelpPage /></ProtectedRoute>} />
       
