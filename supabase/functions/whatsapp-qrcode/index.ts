@@ -121,7 +121,6 @@ Deno.serve(async (req) => {
     }
 
     if (action === "qrcode") {
-      // Get QR code for existing instance
       const { data: inst } = await adminClient
         .from("whatsapp_instances")
         .select("*")
@@ -130,6 +129,36 @@ Deno.serve(async (req) => {
 
       if (!inst) throw new Error("Instância não encontrada");
 
+      // Ensure instance exists on Evolution API (recreate if needed)
+      const checkRes = await fetch(
+        `${inst.evolution_url}/instance/connectionState/${inst.instance_name}`,
+        { headers: { apikey: inst.evolution_api_key } }
+      );
+      if (!checkRes.ok) {
+        // Instance doesn't exist on Evolution, recreate it
+        const createRes = await fetch(`${inst.evolution_url}/instance/create`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", apikey: inst.evolution_api_key },
+          body: JSON.stringify({
+            instanceName: inst.instance_name,
+            integration: "WHATSAPP-BAILEYS",
+            qrcode: true,
+          }),
+        });
+        if (!createRes.ok && createRes.status !== 409) {
+          const err = await createRes.text();
+          if (!err.includes("already in use")) {
+            throw new Error(`Evolution API: ${err}`);
+          }
+        }
+        if (createRes.ok || createRes.status === 409) {
+          await createRes.text(); // consume body
+        }
+      } else {
+        await checkRes.text(); // consume body
+      }
+
+      // Now get QR code
       const qrRes = await fetch(
         `${inst.evolution_url}/instance/connect/${inst.instance_name}`,
         { headers: { apikey: inst.evolution_api_key } }
@@ -141,7 +170,11 @@ Deno.serve(async (req) => {
       }
 
       const qrData = await qrRes.json();
-      return new Response(JSON.stringify({ qrcode: qrData }), {
+      const base64 = qrData.base64 || qrData.qrcode?.base64 || null;
+      return new Response(JSON.stringify({ 
+        qrcode: base64 ? { base64 } : qrData,
+        pairingCode: qrData.pairingCode || null,
+      }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -160,13 +193,13 @@ Deno.serve(async (req) => {
         { headers: { apikey: inst.evolution_api_key } }
       );
 
-      if (!statusRes.ok) {
-        const err = await statusRes.text();
-        throw new Error(`Evolution API: ${err}`);
+      let newStatus = "disconnected";
+      if (statusRes.ok) {
+        const statusData = await statusRes.json();
+        newStatus = statusData.instance?.state === "open" ? "connected" : "disconnected";
+      } else {
+        await statusRes.text(); // consume body, instance may not exist yet
       }
-
-      const statusData = await statusRes.json();
-      const newStatus = statusData.instance?.state === "open" ? "connected" : "disconnected";
 
       await adminClient
         .from("whatsapp_instances")

@@ -117,10 +117,21 @@ function InstanceCard({ instance, profiles, onRefresh }: {
     setQrLoading(true);
     try {
       const result = await callWhatsAppQrcode({ action: 'qrcode', instance_id: instance.id })();
+      if (result.error) throw new Error(result.error);
       const qr = result?.qrcode;
       const base64 = typeof qr === 'string' ? qr : qr?.base64 || null;
-      if (base64) setQrCode(base64.startsWith('data:') ? base64 : `data:image/png;base64,${base64}`);
-      else toast({ title: 'QR Code não disponível', variant: 'destructive' });
+      if (base64) {
+        setQrCode(base64.startsWith('data:') ? base64 : `data:image/png;base64,${base64}`);
+      } else {
+        // Check if already connected
+        const stateCheck = await callWhatsAppQrcode({ action: 'status', instance_id: instance.id })();
+        if (stateCheck.status === 'connected') {
+          setStatus('connected');
+          toast({ title: 'Número já conectado!' });
+        } else {
+          toast({ title: 'QR Code não disponível, tente novamente', variant: 'destructive' });
+        }
+      }
     } catch (err: any) {
       toast({ title: 'Erro', description: err.message, variant: 'destructive' });
     }
@@ -297,8 +308,6 @@ function NewInstanceDialog({ onCreated }: { onCreated: () => void }) {
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
-  const [evolutionUrl, setEvolutionUrl] = useState('http://76.13.230.7:64644');
-  const [apiKey, setApiKey] = useState('bigodao77chave');
   const [instanceName, setInstanceName] = useState('');
   const [creating, setCreating] = useState(false);
 
@@ -312,8 +321,8 @@ function NewInstanceDialog({ onCreated }: { onCreated: () => void }) {
       const result = await callWhatsAppQrcode({
         action: 'create',
         name,
-        evolution_url: evolutionUrl,
-        evolution_api_key: apiKey,
+        evolution_url: 'http://76.13.230.7:64644',
+        evolution_api_key: 'bigodao77chave',
         instance_name: instanceName,
       })();
       if (result.error) throw new Error(result.error);
@@ -337,9 +346,7 @@ function NewInstanceDialog({ onCreated }: { onCreated: () => void }) {
         <DialogHeader><DialogTitle>Conectar Novo Número</DialogTitle></DialogHeader>
         <div className="space-y-3">
           <div><Label>Nome (identificação)</Label><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: WhatsApp Vendas" /></div>
-          <div><Label>Nome da Instância (Evolution API)</Label><Input value={instanceName} onChange={(e) => setInstanceName(e.target.value)} placeholder="Ex: vendas01" /></div>
-          <div><Label>URL Evolution API</Label><Input value={evolutionUrl} onChange={(e) => setEvolutionUrl(e.target.value)} /></div>
-          <div><Label>API Key</Label><Input value={apiKey} onChange={(e) => setApiKey(e.target.value)} /></div>
+          <div><Label>Nome da Instância</Label><Input value={instanceName} onChange={(e) => setInstanceName(e.target.value)} placeholder="Ex: vendas01" /></div>
           <Button onClick={handleCreate} disabled={creating} className="w-full gap-2">
             {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
             Criar Instância
