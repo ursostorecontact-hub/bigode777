@@ -2,6 +2,65 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
+// ── WhatsApp Assignments ──
+
+export function useWhatsAppAssignments(instanceId?: string) {
+  return useQuery({
+    queryKey: ['whatsapp_assignments', instanceId],
+    queryFn: async () => {
+      let query = supabase
+        .from('whatsapp_assignments')
+        .select('*')
+        .order('created_at', { ascending: true });
+      if (instanceId) query = query.eq('whatsapp_instance_id', instanceId);
+      const { data, error } = await query;
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+export function useSaveWhatsAppAssignments() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async ({
+      instanceId,
+      assignments,
+    }: {
+      instanceId: string;
+      assignments: { user_id: string; percentage: number }[];
+    }) => {
+      // Delete existing assignments for this instance
+      const { error: delErr } = await supabase
+        .from('whatsapp_assignments')
+        .delete()
+        .eq('whatsapp_instance_id', instanceId);
+      if (delErr) throw delErr;
+
+      if (assignments.length > 0) {
+        const rows = assignments.map((a) => ({
+          whatsapp_instance_id: instanceId,
+          user_id: a.user_id,
+          percentage: a.percentage,
+        }));
+        const { error: insErr } = await supabase
+          .from('whatsapp_assignments')
+          .insert(rows);
+        if (insErr) throw insErr;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['whatsapp_assignments'] });
+      toast({ title: 'Atribuições salvas!' });
+    },
+    onError: (err: any) => {
+      toast({ title: 'Erro ao salvar atribuições', description: err.message, variant: 'destructive' });
+    },
+  });
+}
+
 export function useWhatsAppInstances() {
   return useQuery({
     queryKey: ['whatsapp_instances'],
