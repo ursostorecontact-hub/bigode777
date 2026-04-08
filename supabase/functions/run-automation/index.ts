@@ -30,8 +30,33 @@ async function sendWebhook(config: Record<string, string>, lead: Record<string, 
   });
 }
 
-async function sendWhatsApp(config: Record<string, string>, lead: Record<string, any>, message: string) {
-  const { evolution_url, evolution_api_key, evolution_instance } = config;
+async function sendWhatsApp(
+  adminClient: any,
+  config: Record<string, string>,
+  lead: Record<string, any>,
+  message: string,
+  tenantId: string | null
+) {
+  let evolution_url = config.evolution_url;
+  let evolution_api_key = config.evolution_api_key;
+  let evolution_instance = config.evolution_instance;
+
+  // Auto-fetch tenant's connected instance
+  if (config.use_tenant_instance === 'true' && tenantId) {
+    const { data: instance } = await adminClient
+      .from("whatsapp_instances")
+      .select("evolution_url, evolution_api_key, instance_name")
+      .eq("tenant_id", tenantId)
+      .eq("status", "connected")
+      .limit(1)
+      .single();
+
+    if (!instance) throw new Error("Nenhuma instância WhatsApp conectada para esta empresa");
+    evolution_url = instance.evolution_url;
+    evolution_api_key = instance.evolution_api_key;
+    evolution_instance = instance.instance_name;
+  }
+
   if (!evolution_url || !evolution_api_key || !evolution_instance) {
     throw new Error("Configuração da Evolution API incompleta");
   }
@@ -138,7 +163,7 @@ Deno.serve(async (req) => {
             await sendWebhook(config, lead, message);
             break;
           case "whatsapp":
-            await sendWhatsApp(config, lead, message);
+            await sendWhatsApp(adminClient, config, lead, message, auto.tenant_id);
             break;
           case "sms":
             await sendSMS(config, lead, message);
