@@ -97,6 +97,11 @@ const faqs = [
   { q: 'O WhatsApp funciona com meu número atual?', a: 'Sim! Você conecta seu próprio número de WhatsApp via QR Code em menos de 2 minutos, sem precisar trocar de número.' },
   { q: 'Quantos usuários posso adicionar?', a: 'Depende do seu plano. O Básico suporta até 3 usuários, o Pro até 10, e o Enterprise tem usuários ilimitados.' },
   { q: 'Meus dados ficam seguros?', a: 'Absolutamente. Utilizamos criptografia de ponta a ponta e cada empresa tem seus dados completamente isolados. Seguimos as melhores práticas de segurança do mercado.' },
+  { q: 'Como funciona a distribuição de leads?', a: 'Você pode distribuir leads automaticamente entre sua equipe usando o modo Round-Robin (rodízio) ou por capacidade de cada vendedor. Também é possível atribuir leads manualmente pelo pipeline.' },
+  { q: 'Posso cancelar minha assinatura a qualquer momento?', a: 'Sim, sem multa e sem burocracia. Basta acessar as configurações da conta e cancelar. O acesso continua até o fim do período já pago.' },
+  { q: 'Vocês oferecem treinamento para minha equipe?', a: 'Sim! Todos os planos incluem acesso à Central de Ajuda com tutoriais. Clientes Pro recebem onboarding guiado e clientes Enterprise têm treinamento personalizado incluso.' },
+  { q: 'É possível integrar com o Facebook Ads?', a: 'Sim, nos planos Pro e Enterprise você pode conectar suas campanhas do Facebook para capturar leads automaticamente e enviar dados de conversão via API.' },
+  { q: 'O que acontece após os 3 dias grátis?', a: 'Após o período de teste, você escolhe o plano que melhor se encaixa na sua equipe. Caso não escolha, a conta é pausada (sem perder dados) até que um plano seja ativado.' },
 ];
 
 const fadeUp = {
@@ -561,10 +566,10 @@ export default function LandingPage() {
             <div>
               <h4 className="font-bold mb-4 text-sm">Legal</h4>
               <ul className="space-y-3 text-sm text-muted-foreground">
-                <li><a href="#" className="hover:text-foreground transition">Sobre</a></li>
-                <li><a href="#" className="hover:text-foreground transition">Contato</a></li>
-                <li><a href="#" className="hover:text-foreground transition">Privacidade</a></li>
-                <li><a href="#" className="hover:text-foreground transition">Termos de uso</a></li>
+                <li><a href="/sobre" className="hover:text-foreground transition">Sobre</a></li>
+                <li><a href="/contato" className="hover:text-foreground transition">Contato</a></li>
+                <li><a href="/privacidade" className="hover:text-foreground transition">Privacidade</a></li>
+                <li><a href="/termos" className="hover:text-foreground transition">Termos de uso</a></li>
               </ul>
             </div>
           </div>
