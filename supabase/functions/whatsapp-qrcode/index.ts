@@ -48,7 +48,7 @@ Deno.serve(async (req) => {
     const { action, instance_id, evolution_url, evolution_api_key, instance_name, name } = await req.json();
 
     if (action === "create") {
-      // Create instance on Evolution API
+      // Try to create instance on Evolution API (ignore if already exists)
       const createRes = await fetch(`${evolution_url}/instance/create`, {
         method: "POST",
         headers: { "Content-Type": "application/json", apikey: evolution_api_key },
@@ -59,12 +59,17 @@ Deno.serve(async (req) => {
         }),
       });
 
+      let createData: any = {};
       if (!createRes.ok) {
-        const err = await createRes.text();
-        throw new Error(`Evolution API: ${err}`);
+        const errText = await createRes.text();
+        // If instance already exists (403/409), continue anyway
+        const isAlreadyExists = errText.includes("already in use") || createRes.status === 409;
+        if (!isAlreadyExists) {
+          throw new Error(`Evolution API: ${errText}`);
+        }
+      } else {
+        createData = await createRes.json();
       }
-
-      const createData = await createRes.json();
 
       // Save to DB
       const { data: saved, error: saveErr } = await adminClient
