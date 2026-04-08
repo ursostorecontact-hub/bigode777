@@ -16,14 +16,16 @@ import { Label } from '@/components/ui/label';
 import {
   MessageSquare, Send, Loader2, Search, Phone, ArrowLeft,
   Check, CheckCheck, Clock, Mic, MicOff, UserPlus, Paperclip,
-  Image as ImageIcon, Video, FileText, X,
+  Image as ImageIcon, Video, FileText, X, Trash2,
 } from 'lucide-react';
 import {
   useWhatsAppChats,
   useWhatsAppMessages,
   useSendWhatsAppMessage,
   useMarkChatRead,
+  useDeleteWhatsAppMessage,
 } from '@/hooks/use-whatsapp-chat';
+import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -281,7 +283,9 @@ function MessageArea({
   const { data: messages, isLoading } = useWhatsAppMessages(chatId);
   const sendMessage = useSendWhatsAppMessage();
   const markRead = useMarkChatRead();
+  const deleteMessage = useDeleteWhatsAppMessage();
   const { toast } = useToast();
+  const { role } = useAuth();
   const [text, setText] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
