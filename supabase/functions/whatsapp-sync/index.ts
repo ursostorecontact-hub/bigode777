@@ -74,16 +74,48 @@ Deno.serve(async (req) => {
 
     console.log(`Syncing chats for instance: ${instance.instance_name}`);
 
-    // 1. Fetch all chats from Evolution API
-    const chatsRes = await fetch(
+    // 1. Fetch all chats from Evolution API (try POST first, then GET)
+    let chats: any[] = [];
+    
+    // Try POST /chat/findChats
+    let chatsRes = await fetch(
       `${instance.evolution_url}/chat/findChats/${instance.instance_name}`,
-      { headers: { apikey: instance.evolution_api_key } }
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: instance.evolution_api_key,
+        },
+        body: JSON.stringify({}),
+      }
     );
-    const chats = await chatsRes.json();
+    let chatsData = await chatsRes.json();
+    console.log("findChats POST response:", JSON.stringify(chatsData).slice(0, 500));
 
-    if (!Array.isArray(chats)) {
-      console.log("No chats array returned:", JSON.stringify(chats).slice(0, 300));
-      return new Response(JSON.stringify({ ok: true, synced: 0, message: "No chats found" }), {
+    if (Array.isArray(chatsData)) {
+      chats = chatsData;
+    } else if (chatsData?.chats && Array.isArray(chatsData.chats)) {
+      chats = chatsData.chats;
+    } else {
+      // Try GET /chat/findContacts as fallback
+      chatsRes = await fetch(
+        `${instance.evolution_url}/chat/findContacts/${instance.instance_name}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: instance.evolution_api_key,
+          },
+          body: JSON.stringify({}),
+        }
+      );
+      chatsData = await chatsRes.json();
+      console.log("findContacts response:", JSON.stringify(chatsData).slice(0, 500));
+      if (Array.isArray(chatsData)) chats = chatsData;
+    }
+
+    if (chats.length === 0) {
+      return new Response(JSON.stringify({ ok: true, synced_chats: 0, synced_messages: 0, message: "No chats found from API" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -95,15 +127,20 @@ Deno.serve(async (req) => {
 
     for (const chat of chats) {
       try {
-        const remoteJid = chat.id || chat.remoteJid || "";
+        // Evolution API v2: chat has remoteJid field, id is internal
+        const remoteJid = chat.remoteJid || "";
 
-        // Skip groups and broadcasts
-        if (!remoteJid || remoteJid.includes("@g.us") || remoteJid === "status@broadcast") {
+        // Only sync individual WhatsApp contacts (@s.whatsapp.net or @lid)
+        // Skip groups (@g.us), broadcasts, and internal IDs without @
+        if (!remoteJid || !remoteJid.includes("@") || remoteJid.includes("@g.us") || remoteJid === "status@broadcast") {
           continue;
         }
 
-        const contactPhone = remoteJid.split("@")[0];
-        const contactName = chat.name || chat.pushName || chat.contact || contactPhone;
+        // Try to get the phone number from remoteJidAlt or remoteJid
+        const altJid = chat.lastMessage?.key?.remoteJidAlt || "";
+        const phoneJid = altJid.includes("@s.whatsapp.net") ? altJid : remoteJid;
+        const contactPhone = phoneJid.split("@")[0];
+        const contactName = chat.pushName || chat.name || chat.contact || contactPhone;
 
         // Upsert chat
         const { data: dbChat, error: chatErr } = await supabase
@@ -152,10 +189,27 @@ Deno.serve(async (req) => {
           );
 
           const msgsData = await msgsRes.json();
-          const messages = Array.isArray(msgsData) ? msgsData : msgsData?.messages || msgsData?.data || [];
+          
+          // Log first chat's response to debug format
+          if (syncedChats <= 2) {
+            console.log(`Messages response for ${remoteJid}:`, JSON.stringify(msgsData).slice(0, 500));
+          }
 
-          if (!Array.isArray(messages)) {
-            console.log(`No messages array for ${remoteJid}`);
+          // Handle various response formats including nested messages.records
+          let messages: any[] = [];
+          if (Array.isArray(msgsData)) {
+            messages = msgsData;
+          } else if (msgsData?.messages?.records && Array.isArray(msgsData.messages.records)) {
+            messages = msgsData.messages.records;
+          } else if (msgsData?.messages && Array.isArray(msgsData.messages)) {
+            messages = msgsData.messages;
+          } else if (msgsData?.data && Array.isArray(msgsData.data)) {
+            messages = msgsData.data;
+          } else if (msgsData?.records && Array.isArray(msgsData.records)) {
+            messages = msgsData.records;
+          }
+
+          if (messages.length === 0) {
             continue;
           }
 
