@@ -190,10 +190,12 @@ Deno.serve(async (req) => {
             console.log(`Messages response for ${remoteJid}:`, JSON.stringify(msgsData).slice(0, 500));
           }
 
-          // Handle various response formats
+          // Handle various response formats including nested messages.records
           let messages: any[] = [];
           if (Array.isArray(msgsData)) {
             messages = msgsData;
+          } else if (msgsData?.messages?.records && Array.isArray(msgsData.messages.records)) {
+            messages = msgsData.messages.records;
           } else if (msgsData?.messages && Array.isArray(msgsData.messages)) {
             messages = msgsData.messages;
           } else if (msgsData?.data && Array.isArray(msgsData.data)) {
