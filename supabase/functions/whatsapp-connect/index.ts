@@ -8,6 +8,116 @@ const corsHeaders = {
 const EVOLUTION_URL = "http://76.13.230.7:64644";
 const EVOLUTION_API_KEY = "bigodao77chave";
 const INSTANCE_NAME = "bigodao77";
+const STALE_INSTANCE_MAX_AGE_MS = 10 * 60 * 1000;
+
+type ConnectionStateResponse = {
+  instance?: {
+    state?: string;
+    owner?: string | null;
+  };
+};
+
+type InstanceDetails = {
+  connectionStatus?: string;
+  createdAt?: string;
+  number?: string | null;
+  ownerJid?: string | null;
+  profileName?: string | null;
+  instance?: {
+    owner?: string | null;
+  };
+  owner?: string | null;
+};
+
+async function evolutionRequest(path: string, init: RequestInit = {}) {
+  const headers = new Headers(init.headers);
+  headers.set("apikey", EVOLUTION_API_KEY);
+
+  if (init.body && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+
+  return fetch(`${EVOLUTION_URL}${path}`, {
+    ...init,
+    headers,
+  });
+}
+
+async function getConnectionState(): Promise<ConnectionStateResponse | null> {
+  const response = await evolutionRequest(`/instance/connectionState/${INSTANCE_NAME}`);
+  if (!response.ok) return null;
+  return await response.json();
+}
+
+async function getInstanceDetails(): Promise<InstanceDetails | null> {
+  const response = await evolutionRequest(`/instance/fetchInstances?instanceName=${INSTANCE_NAME}`);
+  if (!response.ok) return null;
+
+  const data = await response.json();
+  if (Array.isArray(data)) {
+    return (data[0] ?? null) as InstanceDetails | null;
+  }
+
+  return (data ?? null) as InstanceDetails | null;
+}
+
+function getConnectedPhone(details: InstanceDetails | null) {
+  return details?.number || details?.ownerJid || details?.instance?.owner || details?.owner || null;
+}
+
+function isOpenState(state: ConnectionStateResponse | null, details: InstanceDetails | null) {
+  return state?.instance?.state === "open" || details?.connectionStatus === "open";
+}
+
+function isStaleInstance(details: InstanceDetails | null) {
+  if (!details?.createdAt) return false;
+
+  const createdAt = Date.parse(details.createdAt);
+  if (Number.isNaN(createdAt)) return false;
+
+  return Date.now() - createdAt > STALE_INSTANCE_MAX_AGE_MS;
+}
+
+async function createInstance() {
+  const response = await evolutionRequest(`/instance/create`, {
+    method: "POST",
+    body: JSON.stringify({
+      instanceName: INSTANCE_NAME,
+      integration: "WHATSAPP-BAILEYS",
+      qrcode: true,
+    }),
+  });
+
+  if (!response.ok && response.status !== 409) {
+    throw new Error(`Erro ao criar instância: ${await response.text()}`);
+  }
+}
+
+async function resetInstance() {
+  await evolutionRequest(`/instance/logout/${INSTANCE_NAME}`, { method: "DELETE" }).catch(() => null);
+  await evolutionRequest(`/instance/delete/${INSTANCE_NAME}`, { method: "DELETE" }).catch(() => null);
+  await createInstance();
+}
+
+async function ensureConnectableInstance() {
+  let state = await getConnectionState();
+  let details = await getInstanceDetails();
+
+  const shouldCreate = !state && !details;
+  const shouldReset = !isOpenState(state, details) && isStaleInstance(details);
+
+  if (shouldCreate) {
+    await createInstance();
+    state = await getConnectionState();
+    details = await getInstanceDetails();
+  } else if (shouldReset) {
+    await resetInstance();
+    state = await getConnectionState();
+    details = await getInstanceDetails();
+  }
+
+  return { state, details, reset: shouldReset };
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -52,35 +162,18 @@ Deno.serve(async (req) => {
 
     // Get connection status
     if (action === "status") {
-      const statusRes = await fetch(
-        `${EVOLUTION_URL}/instance/connectionState/${INSTANCE_NAME}`,
-        { headers: { apikey: EVOLUTION_API_KEY } }
-      );
-      
-      if (!statusRes.ok) {
+      const state = await getConnectionState();
+      const details = await getInstanceDetails();
+
+      if (!state && !details) {
         // Instance might not exist yet
         return new Response(JSON.stringify({ status: "disconnected", phone: null }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
-      const statusData = await statusRes.json();
-      const isConnected = statusData.instance?.state === "open";
-      
-      let phoneNumber = null;
-      if (isConnected) {
-        try {
-          const infoRes = await fetch(
-            `${EVOLUTION_URL}/instance/fetchInstances?instanceName=${INSTANCE_NAME}`,
-            { headers: { apikey: EVOLUTION_API_KEY } }
-          );
-          if (infoRes.ok) {
-            const infoData = await infoRes.json();
-            const inst = Array.isArray(infoData) ? infoData[0] : infoData;
-            phoneNumber = inst?.instance?.owner || inst?.owner || null;
-          }
-        } catch (_) { /* ignore */ }
-      }
+      const isConnected = isOpenState(state, details);
+      const phoneNumber = isConnected ? getConnectedPhone(details) : null;
 
       return new Response(JSON.stringify({ 
         status: isConnected ? "connected" : "disconnected",
@@ -92,55 +185,10 @@ Deno.serve(async (req) => {
 
     // Create instance if it doesn't exist, then get QR code
     if (action === "qrcode") {
-      // First check if instance exists
-      let instanceExists = false;
-      try {
-        const checkRes = await fetch(
-          `${EVOLUTION_URL}/instance/connectionState/${INSTANCE_NAME}`,
-          { headers: { apikey: EVOLUTION_API_KEY } }
-        );
-        if (checkRes.ok) {
-          instanceExists = true;
-        }
-        await checkRes.text(); // consume body
-      } catch (_) { /* instance doesn't exist */ }
-
-      // Only create if instance doesn't exist
-      if (!instanceExists) {
-        try {
-          const createRes = await fetch(`${EVOLUTION_URL}/instance/create`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", apikey: EVOLUTION_API_KEY },
-            body: JSON.stringify({
-              instanceName: INSTANCE_NAME,
-              integration: "WHATSAPP-BAILEYS",
-              qrcode: true,
-            }),
-          });
-          const createText = await createRes.text();
-          console.log("Create instance response:", createRes.status, createText);
-          if (!createRes.ok && createRes.status !== 409) {
-            // 409 = already exists, which is fine
-            throw new Error(`Erro ao criar instância: ${createText}`);
-          }
-        } catch (e: any) {
-          if (!e.message?.includes("409")) {
-            console.error("Create instance error:", e.message);
-            return new Response(JSON.stringify({ 
-              error: e.message || "Não foi possível criar a instância. Verifique se a Evolution API está funcionando.",
-              fallback: true,
-            }), {
-              status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
-            });
-          }
-        }
-      }
+      await ensureConnectableInstance();
 
       // Get QR code by connecting
-      const qrRes = await fetch(
-        `${EVOLUTION_URL}/instance/connect/${INSTANCE_NAME}`,
-        { headers: { apikey: EVOLUTION_API_KEY } }
-      );
+      const qrRes = await evolutionRequest(`/instance/connect/${INSTANCE_NAME}`);
 
       if (!qrRes.ok) {
         const err = await qrRes.text();
@@ -168,20 +216,10 @@ Deno.serve(async (req) => {
       
       const cleanPhone = phone.replace(/\D/g, "");
 
-      // Request pairing code
-      const pairRes = await fetch(
-        `${EVOLUTION_URL}/instance/connect/${INSTANCE_NAME}`,
-        { 
-          method: "GET",
-          headers: { apikey: EVOLUTION_API_KEY },
-        }
-      );
+      await ensureConnectableInstance();
 
       // Try the specific pairing code endpoint
-      const pairCodeRes = await fetch(
-        `${EVOLUTION_URL}/instance/connect/${INSTANCE_NAME}?number=${cleanPhone}`,
-        { headers: { apikey: EVOLUTION_API_KEY } }
-      );
+      const pairCodeRes = await evolutionRequest(`/instance/connect/${INSTANCE_NAME}?number=${cleanPhone}`);
 
       if (!pairCodeRes.ok) {
         const err = await pairCodeRes.text();
@@ -198,10 +236,7 @@ Deno.serve(async (req) => {
 
     // Disconnect / logout
     if (action === "disconnect") {
-      const logoutRes = await fetch(
-        `${EVOLUTION_URL}/instance/logout/${INSTANCE_NAME}`,
-        { method: "DELETE", headers: { apikey: EVOLUTION_API_KEY } }
-      );
+      await evolutionRequest(`/instance/logout/${INSTANCE_NAME}`, { method: "DELETE" });
       
       return new Response(JSON.stringify({ ok: true }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
