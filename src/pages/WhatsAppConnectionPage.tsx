@@ -240,6 +240,33 @@ function InstanceCard({ instance, profiles, onRefresh }: {
     setDeleting(false);
   };
 
+  const handleSyncMessages = async () => {
+    setSyncing(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/whatsapp-sync`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session?.access_token}`,
+          },
+          body: JSON.stringify({ instance_id: instance.id }),
+        },
+      );
+      const result = await res.json();
+      if (result.error) throw new Error(result.error);
+      toast({
+        title: 'Sincronização concluída',
+        description: `${result.synced_chats || 0} conversas e ${result.synced_messages || 0} mensagens importadas`,
+      });
+    } catch (err: any) {
+      toast({ title: 'Erro ao sincronizar', description: err.message, variant: 'destructive' });
+    }
+    setSyncing(false);
+  };
+
   const totalPct = Object.values(localAssignments).reduce((s, v) => s + v, 0);
   const assignedProfiles = profiles.filter((p) => p.id in localAssignments);
   const unassignedProfiles = profiles.filter((p) => !(p.id in localAssignments));
