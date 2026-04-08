@@ -137,6 +137,7 @@ function InstanceCard({ instance, profiles, onRefresh }: {
   const [pairingCode, setPairingCode] = useState<string | null>(null);
   const [pairingPhone, setPairingPhone] = useState('');
   const [pairingLoading, setPairingLoading] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const qrInterval = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const isConnected = status === 'connected';
