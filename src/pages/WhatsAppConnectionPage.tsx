@@ -532,7 +532,161 @@ function NewInstanceDialog({ onCreated }: { onCreated: () => void }) {
 
 // ── Main Page ──
 
+// ── Salesperson View: My Leads ──
+
+function SalespersonWhatsAppView() {
+  const { user } = useAuth();
+  const { data: leads, isLoading: leadsLoading } = useLeads();
+  const { data: assignments } = useWhatsAppAssignments();
+  const { data: instances } = useWhatsAppInstances();
+
+  const myAssignments = assignments?.filter(a => a.user_id === user?.id) || [];
+  const myInstanceIds = myAssignments.map(a => a.whatsapp_instance_id);
+  const myInstances = instances?.filter(i => myInstanceIds.includes(i.id)) || [];
+
+  const myLeads = leads?.filter(l => l.assigned_to === user?.id) || [];
+
+  const statusConfig: Record<string, { label: string; color: string }> = {
+    novo: { label: 'Novo', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' },
+    contactado: { label: 'Contactado', color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' },
+    negociando: { label: 'Negociando', color: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300' },
+    proposta_enviada: { label: 'Proposta', color: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300' },
+    ganho: { label: 'Ganho', color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' },
+    perdido: { label: 'Perdido', color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' },
+  };
+
+  if (leadsLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6 animate-fade-in">
+      <div>
+        <h1 className="text-2xl font-bold text-foreground">WhatsApp</h1>
+        <p className="text-muted-foreground text-sm">
+          Seus leads e números vinculados
+        </p>
+      </div>
+
+      {/* My WhatsApp Numbers */}
+      {myInstances.length > 0 && (
+        <div className="space-y-3">
+          <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
+            <Phone className="h-4 w-4 text-primary" />
+            Números vinculados a você
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {myInstances.map(inst => {
+              const assignment = myAssignments.find(a => a.whatsapp_instance_id === inst.id);
+              return (
+                <Card key={inst.id}>
+                  <CardContent className="p-4 flex items-center gap-3">
+                    <div className={`p-2 rounded-lg ${inst.status === 'connected' ? 'bg-green-100 dark:bg-green-900/30' : 'bg-muted'}`}>
+                      {inst.status === 'connected'
+                        ? <Wifi className="h-4 w-4 text-green-600" />
+                        : <WifiOff className="h-4 w-4 text-muted-foreground" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-sm text-foreground truncate">{inst.name}</p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <Badge variant={inst.status === 'connected' ? 'default' : 'secondary'} className="text-[10px] h-5">
+                          {inst.status === 'connected' ? 'Online' : 'Offline'}
+                        </Badge>
+                        {assignment && (
+                          <span className="text-xs text-muted-foreground">{assignment.percentage}% dos leads</span>
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* My Leads */}
+      <div className="space-y-3">
+        <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
+          <Users className="h-4 w-4 text-primary" />
+          Meus Leads ({myLeads.length})
+        </h2>
+
+        {myLeads.length === 0 ? (
+          <Card className="border-dashed">
+            <CardContent className="flex flex-col items-center justify-center py-12 gap-3">
+              <User className="h-8 w-8 text-muted-foreground/40" />
+              <p className="text-sm text-muted-foreground">Nenhum lead atribuído a você ainda</p>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {myLeads.map(lead => {
+              const st = statusConfig[lead.status] || statusConfig['novo'];
+              return (
+                <Card key={lead.id} className="hover:shadow-md transition-shadow">
+                  <CardContent className="p-4 space-y-3">
+                    <div className="flex items-start justify-between">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-foreground truncate">{lead.name}</p>
+                        <p className="text-xs text-muted-foreground">{lead.source} • {formatDate(lead.created_at)}</p>
+                      </div>
+                      <Badge className={`${st.color} border-0 text-[10px] h-5 shrink-0`}>{st.label}</Badge>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      {lead.phone && (
+                        <div className="flex items-center gap-2 text-sm">
+                          <PhoneCall className="h-3.5 w-3.5 text-muted-foreground" />
+                          <a href={`https://wa.me/${lead.phone.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                            {lead.phone}
+                          </a>
+                        </div>
+                      )}
+                      {lead.email && (
+                        <div className="flex items-center gap-2 text-sm">
+                          <Mail className="h-3.5 w-3.5 text-muted-foreground" />
+                          <span className="text-muted-foreground truncate">{lead.email}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {lead.value > 0 && (
+                      <p className="text-sm font-bold text-primary">{formatCurrency(lead.value)}</p>
+                    )}
+
+                    {lead.notes && (
+                      <p className="text-xs text-muted-foreground line-clamp-2">{lead.notes}</p>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Main Page ──
+
 export default function WhatsAppConnectionPage() {
+  const { role } = useAuth();
+  const isAdmin = role === 'admin' || role === 'manager';
+
+  if (!isAdmin) {
+    return <SalespersonWhatsAppView />;
+  }
+
+  return <AdminWhatsAppView />;
+}
+
+function AdminWhatsAppView() {
   const { data: instances, isLoading, refetch } = useWhatsAppInstances();
   const { data: profiles } = useProfiles();
 
@@ -546,7 +700,6 @@ export default function WhatsAppConnectionPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-foreground">WhatsApp</h1>
@@ -557,7 +710,6 @@ export default function WhatsAppConnectionPage() {
         <NewInstanceDialog onCreated={() => refetch()} />
       </div>
 
-      {/* Empty state */}
       {(!instances || instances.length === 0) ? (
         <Card className="border-dashed">
           <CardContent className="flex flex-col items-center justify-center py-16 gap-4">
@@ -585,7 +737,6 @@ export default function WhatsAppConnectionPage() {
         </div>
       )}
 
-      {/* How it works */}
       <Card className="bg-primary/5 border-primary/10">
         <CardContent className="p-4 flex items-start gap-3">
           <div className="p-1.5 rounded-lg bg-primary/10 mt-0.5">
