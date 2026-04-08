@@ -78,7 +78,7 @@ export function AppSidebar() {
                 <div className="h-8 w-8 rounded-lg gradient-primary flex items-center justify-center">
                   <BarChart3 className="h-4 w-4 text-primary-foreground" />
                 </div>
-                <span className="font-bold text-sidebar-accent-foreground text-base">Bigodão 77</span>
+                <span className="font-bold text-sidebar-accent-foreground text-base"><span className="font-bold text-sidebar-accent-foreground text-base">Flash CRMs</span></span>
               </div>
             )}
             {collapsed && (

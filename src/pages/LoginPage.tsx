@@ -53,7 +53,7 @@ export default function LoginPage() {
           <div className="h-14 w-14 rounded-2xl gradient-primary flex items-center justify-center mb-4">
             <BarChart3 className="h-7 w-7 text-primary-foreground" />
           </div>
-          <h1 className="text-2xl font-bold text-foreground">Bigodão 77</h1>
+          <h1 className="text-2xl font-bold text-foreground"><h1 className="text-2xl font-bold text-foreground">Flash CRMs</h1></h1>
           <p className="text-muted-foreground text-sm mt-1">Gerencie seus leads e vendas</p>
         </div>
 
