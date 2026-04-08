@@ -58,9 +58,6 @@ export default function AutomationsPage() {
     setMessageTemplate('');
     setInactiveDays('3');
     setWebhookUrl('');
-    setEvolutionUrl('');
-    setEvolutionApiKey('');
-    setEvolutionInstance('');
     setTwilioFrom('');
   };
 
@@ -75,13 +72,8 @@ export default function AutomationsPage() {
       if (!webhookUrl) { toast({ title: 'Informe a URL do webhook', variant: 'destructive' }); return; }
       config.webhook_url = webhookUrl;
     } else if (actionType === 'whatsapp') {
-      if (!evolutionUrl || !evolutionApiKey || !evolutionInstance) {
-        toast({ title: 'Preencha todos os campos da Evolution API', variant: 'destructive' });
-        return;
-      }
-      config.evolution_url = evolutionUrl;
-      config.evolution_api_key = evolutionApiKey;
-      config.evolution_instance = evolutionInstance;
+      // Uses the tenant's connected WhatsApp instance automatically
+      config.use_tenant_instance = 'true';
     } else if (actionType === 'sms') {
       if (!twilioFrom) { toast({ title: 'Informe o número Twilio (From)', variant: 'destructive' }); return; }
       config.twilio_from = twilioFrom;
@@ -228,20 +220,12 @@ export default function AutomationsPage() {
             )}
 
             {actionType === 'whatsapp' && (
-              <>
-                <div className="space-y-2">
-                  <Label>URL da Evolution API *</Label>
-                  <Input value={evolutionUrl} onChange={e => setEvolutionUrl(e.target.value)} placeholder="https://api.evolution.com" />
-                </div>
-                <div className="space-y-2">
-                  <Label>API Key da Evolution *</Label>
-                  <Input value={evolutionApiKey} onChange={e => setEvolutionApiKey(e.target.value)} placeholder="Sua chave de API" />
-                </div>
-                <div className="space-y-2">
-                  <Label>Nome da Instância *</Label>
-                  <Input value={evolutionInstance} onChange={e => setEvolutionInstance(e.target.value)} placeholder="bigodao77" />
-                </div>
-              </>
+              <div className="rounded-lg border border-border bg-muted/50 p-3">
+                <p className="text-sm text-muted-foreground">
+                  <MessageSquare className="h-4 w-4 inline mr-1" />
+                  As mensagens serão enviadas pela instância WhatsApp conectada da sua empresa automaticamente.
+                </p>
+              </div>
             )}
 
             {actionType === 'sms' && (

@@ -56,7 +56,7 @@ export function useUpdateAutomation() {
   const qc = useQueryClient();
   const { toast } = useToast();
   return useMutation({
-    mutationFn: async ({ id, ...updates }: { id: string; [key: string]: any }) => {
+    mutationFn: async ({ id, ...updates }: { id: string; active?: boolean; name?: string; config?: Record<string, string>; message_template?: string | null; inactive_days?: number | null }) => {
       const { error } = await supabase
         .from('automations')
         .update(updates)
