@@ -14,7 +14,6 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Authenticate user
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       return new Response(JSON.stringify({ error: "No auth" }), {
@@ -36,11 +35,11 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { action, chat_id, content, message_type = "text", phone, instance_id } = await req.json();
+    const { action, chat_id, content, message_type = "text", media_base64, media_mimetype, media_filename, phone, instance_id } = await req.json();
 
     if (action === "send") {
-      if (!chat_id || !content) {
-        return new Response(JSON.stringify({ error: "chat_id and content required" }), {
+      if (!chat_id) {
+        return new Response(JSON.stringify({ error: "chat_id required" }), {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
@@ -60,7 +59,7 @@ Deno.serve(async (req) => {
         });
       }
 
-      // Check access: must be assigned or admin
+      // Check access
       const { data: roleData } = await supabase
         .from("user_roles")
         .select("role")
@@ -77,25 +76,105 @@ Deno.serve(async (req) => {
 
       const instance = chat.whatsapp_instances;
       const number = chat.remote_jid.replace("@s.whatsapp.net", "");
+      let evoData: any = {};
+      let messageId: string | null = null;
+      let savedMediaUrl: string | null = null;
+      const actualType = message_type || "text";
 
-      // Send via Evolution API
-      const evoUrl = `${instance.evolution_url}/message/sendText/${instance.instance_name}`;
-      const evoRes = await fetch(evoUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          apikey: instance.evolution_api_key,
-        },
-        body: JSON.stringify({
-          number,
-          text: content,
-        }),
-      });
+      if (actualType === "text") {
+        // Send text message
+        const evoUrl = `${instance.evolution_url}/message/sendText/${instance.instance_name}`;
+        const evoRes = await fetch(evoUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: instance.evolution_api_key,
+          },
+          body: JSON.stringify({ number, text: content }),
+        });
+        evoData = await evoRes.json();
+        messageId = evoData?.key?.id || null;
 
-      const evoData = await evoRes.json();
+      } else if (actualType === "audio" && media_base64) {
+        // Upload audio to storage, then send via Evolution API
+        const filename = `audio/${Date.now()}_${crypto.randomUUID()}.ogg`;
+        const audioBuffer = Uint8Array.from(atob(media_base64), c => c.charCodeAt(0));
+
+        const { data: uploadData, error: uploadErr } = await supabase.storage
+          .from("whatsapp-media")
+          .upload(filename, audioBuffer, {
+            contentType: media_mimetype || "audio/ogg",
+            upsert: false,
+          });
+
+        if (uploadErr) {
+          console.error("Upload error:", uploadErr);
+        }
+
+        const { data: publicUrlData } = supabase.storage
+          .from("whatsapp-media")
+          .getPublicUrl(filename);
+        savedMediaUrl = publicUrlData?.publicUrl || null;
+
+        // Send audio via Evolution API
+        const evoUrl = `${instance.evolution_url}/message/sendWhatsAppAudio/${instance.instance_name}`;
+        const evoRes = await fetch(evoUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: instance.evolution_api_key,
+          },
+          body: JSON.stringify({
+            number,
+            audio: savedMediaUrl,
+          }),
+        });
+        evoData = await evoRes.json();
+        messageId = evoData?.key?.id || null;
+
+      } else if ((actualType === "image" || actualType === "video" || actualType === "document") && media_base64) {
+        // Upload media to storage
+        const ext = actualType === "image" ? "jpg" : actualType === "video" ? "mp4" : (media_filename?.split('.').pop() || "bin");
+        const filename = `${actualType}/${Date.now()}_${crypto.randomUUID()}.${ext}`;
+        const mediaBuffer = Uint8Array.from(atob(media_base64), c => c.charCodeAt(0));
+
+        const { error: uploadErr } = await supabase.storage
+          .from("whatsapp-media")
+          .upload(filename, mediaBuffer, {
+            contentType: media_mimetype || "application/octet-stream",
+            upsert: false,
+          });
+
+        if (uploadErr) {
+          console.error("Upload error:", uploadErr);
+        }
+
+        const { data: publicUrlData } = supabase.storage
+          .from("whatsapp-media")
+          .getPublicUrl(filename);
+        savedMediaUrl = publicUrlData?.publicUrl || null;
+
+        // Send media via Evolution API
+        const evoUrl = `${instance.evolution_url}/message/sendMedia/${instance.instance_name}`;
+        const evoRes = await fetch(evoUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: instance.evolution_api_key,
+          },
+          body: JSON.stringify({
+            number,
+            mediatype: actualType,
+            media: savedMediaUrl,
+            caption: content || "",
+            fileName: media_filename || undefined,
+          }),
+        });
+        evoData = await evoRes.json();
+        messageId = evoData?.key?.id || null;
+      }
+
       console.log("Evolution send response:", JSON.stringify(evoData).slice(0, 300));
-
-      const messageId = evoData?.key?.id || null;
 
       // Save message to DB
       const { data: msg, error: msgErr } = await supabase
@@ -104,8 +183,9 @@ Deno.serve(async (req) => {
           chat_id,
           from_me: true,
           remote_jid: chat.remote_jid,
-          message_type: message_type,
-          content,
+          message_type: actualType,
+          content: content || (actualType === "audio" ? "🎵 Áudio" : actualType === "image" ? "📷 Imagem" : actualType === "video" ? "🎥 Vídeo" : "📄 Arquivo"),
+          media_url: savedMediaUrl,
           status: "sent",
           evolution_message_id: messageId,
         })
@@ -117,10 +197,11 @@ Deno.serve(async (req) => {
       }
 
       // Update chat last message
+      const lastMsg = content || (actualType === "audio" ? "🎵 Áudio" : actualType === "image" ? "📷 Imagem" : actualType === "video" ? "🎥 Vídeo" : "📄 Arquivo");
       await supabase
         .from("whatsapp_chats")
         .update({
-          last_message: content,
+          last_message: lastMsg,
           last_message_at: new Date().toISOString(),
           unread_count: 0,
         })
@@ -132,7 +213,6 @@ Deno.serve(async (req) => {
     }
 
     if (action === "fetch_chats") {
-      // Fetch chats from Evolution API and sync to DB
       if (!instance_id) {
         return new Response(JSON.stringify({ error: "instance_id required" }), {
           status: 400,
@@ -153,7 +233,6 @@ Deno.serve(async (req) => {
         });
       }
 
-      // Fetch chats from Evolution
       const evoRes = await fetch(
         `${instance.evolution_url}/chat/findChats/${instance.instance_name}`,
         { headers: { apikey: instance.evolution_api_key } }

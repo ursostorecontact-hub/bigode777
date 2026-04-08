@@ -77,7 +77,21 @@ export function useWhatsAppMessages(chatId: string | null) {
 export function useSendWhatsAppMessage() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ chatId, content }: { chatId: string; content: string }) => {
+    mutationFn: async ({
+      chatId,
+      content,
+      messageType = 'text',
+      mediaBase64,
+      mediaMimetype,
+      mediaFilename,
+    }: {
+      chatId: string;
+      content: string;
+      messageType?: string;
+      mediaBase64?: string;
+      mediaMimetype?: string;
+      mediaFilename?: string;
+    }) => {
       const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/whatsapp-send`,
@@ -87,7 +101,15 @@ export function useSendWhatsAppMessage() {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${session?.access_token}`,
           },
-          body: JSON.stringify({ action: 'send', chat_id: chatId, content }),
+          body: JSON.stringify({
+            action: 'send',
+            chat_id: chatId,
+            content,
+            message_type: messageType,
+            media_base64: mediaBase64,
+            media_mimetype: mediaMimetype,
+            media_filename: mediaFilename,
+          }),
         }
       );
       const data = await res.json();

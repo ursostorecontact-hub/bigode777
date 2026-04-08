@@ -16,6 +16,7 @@ import { Label } from '@/components/ui/label';
 import {
   MessageSquare, Send, Loader2, Search, Phone, ArrowLeft,
   Check, CheckCheck, Clock, Mic, MicOff, UserPlus, Paperclip,
+  Image as ImageIcon, Video, FileText, X,
 } from 'lucide-react';
 import {
   useWhatsAppChats,
@@ -283,7 +284,9 @@ function MessageArea({
   const { toast } = useToast();
   const [text, setText] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [sending, setSending] = useState(false);
   const audio = useAudioRecorder();
 
   useEffect(() => {
@@ -318,23 +321,28 @@ function MessageArea({
     if (audio.recording) {
       try {
         const blob = await audio.stop();
-        // Send audio as base64 via the send edge function
+        setSending(true);
         const reader = new FileReader();
         reader.onloadend = async () => {
           const base64 = (reader.result as string).split(',')[1];
           try {
             await sendMessage.mutateAsync({
               chatId,
-              content: '🎤 Áudio',
+              content: '🎵 Áudio',
+              messageType: 'audio',
+              mediaBase64: base64,
+              mediaMimetype: 'audio/ogg',
             });
-            toast({ title: 'Áudio enviado' });
           } catch (err: any) {
             toast({ title: 'Erro ao enviar áudio', description: err.message, variant: 'destructive' });
+          } finally {
+            setSending(false);
           }
         };
         reader.readAsDataURL(blob);
       } catch (err: any) {
         toast({ title: 'Erro', description: err.message, variant: 'destructive' });
+        setSending(false);
       }
     } else {
       try {
@@ -343,6 +351,42 @@ function MessageArea({
         toast({ title: 'Microfone', description: err.message, variant: 'destructive' });
       }
     }
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    setSending(true);
+    try {
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64 = (reader.result as string).split(',')[1];
+        let messageType = 'document';
+        if (file.type.startsWith('image/')) messageType = 'image';
+        else if (file.type.startsWith('video/')) messageType = 'video';
+
+        try {
+          await sendMessage.mutateAsync({
+            chatId,
+            content: '',
+            messageType,
+            mediaBase64: base64,
+            mediaMimetype: file.type,
+            mediaFilename: file.name,
+          });
+        } catch (err: any) {
+          toast({ title: 'Erro ao enviar', description: err.message, variant: 'destructive' });
+        } finally {
+          setSending(false);
+        }
+      };
+      reader.readAsDataURL(file);
+    } catch {
+      setSending(false);
+    }
+    // Reset input
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const contactName = chat?.contact_name || chat?.contact_phone || 'Desconhecido';
@@ -428,7 +472,7 @@ function MessageArea({
                       }`}
                     >
                       {msg.message_type === 'audio' && msg.media_url ? (
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 min-w-[200px]">
                           <Mic className="h-4 w-4 shrink-0 opacity-70" />
                           <audio controls preload="none" className="h-8 max-w-[220px]" src={msg.media_url}>
                             Seu navegador não suporta áudio.
@@ -439,10 +483,48 @@ function MessageArea({
                           <Mic className="h-4 w-4 shrink-0 opacity-70" />
                           <span className="text-sm">🎤 Áudio</span>
                         </div>
+                      ) : msg.message_type === 'image' && msg.media_url ? (
+                        <div>
+                          <a href={msg.media_url} target="_blank" rel="noopener noreferrer">
+                            <img
+                              src={msg.media_url}
+                              alt="Imagem"
+                              className="rounded-lg max-w-[250px] max-h-[300px] object-cover cursor-pointer"
+                              loading="lazy"
+                            />
+                          </a>
+                          {msg.content && msg.content !== '📷 Imagem' && (
+                            <p className="whitespace-pre-wrap break-words mt-1">{msg.content}</p>
+                          )}
+                        </div>
+                      ) : msg.message_type === 'video' && msg.media_url ? (
+                        <div>
+                          <video
+                            controls
+                            preload="none"
+                            className="rounded-lg max-w-[250px] max-h-[300px]"
+                            src={msg.media_url}
+                          />
+                          {msg.content && msg.content !== '🎥 Vídeo' && (
+                            <p className="whitespace-pre-wrap break-words mt-1">{msg.content}</p>
+                          )}
+                        </div>
+                      ) : msg.message_type === 'document' && msg.media_url ? (
+                        <a
+                          href={msg.media_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2 underline"
+                        >
+                          <FileText className="h-4 w-4 shrink-0" />
+                          <span className="text-sm">{msg.content || '📄 Documento'}</span>
+                        </a>
                       ) : (
                         <>
                           {msg.message_type !== 'text' && (
-                            <p className="text-xs opacity-70 mb-0.5">{msg.message_type}</p>
+                            <p className="text-xs opacity-70 mb-0.5">
+                              {msg.message_type === 'image' ? '📷 Imagem' : msg.message_type === 'video' ? '🎥 Vídeo' : msg.message_type}
+                            </p>
                           )}
                           <p className="whitespace-pre-wrap break-words">{msg.content}</p>
                         </>
@@ -468,6 +550,12 @@ function MessageArea({
 
       {/* Input Bar */}
       <div className="p-3 border-t border-border bg-card">
+        {sending && (
+          <div className="flex items-center gap-2 mb-2 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span>Enviando mídia...</span>
+          </div>
+        )}
         {audio.recording ? (
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="icon" className="h-10 w-10 text-destructive" onClick={audio.cancel} title="Cancelar">
@@ -479,6 +567,7 @@ function MessageArea({
             </div>
             <Button
               onClick={handleAudioToggle}
+              disabled={sending}
               size="icon"
               className="h-10 w-10 shrink-0"
             >
@@ -486,13 +575,31 @@ function MessageArea({
             </Button>
           </div>
         ) : (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx"
+              className="hidden"
+              onChange={handleFileSelect}
+            />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-10 w-10 shrink-0"
+              onClick={() => fileInputRef.current?.click()}
+              title="Enviar foto, vídeo ou arquivo"
+              disabled={sending}
+            >
+              <Paperclip className="h-5 w-5" />
+            </Button>
             <Button
               variant="ghost"
               size="icon"
               className="h-10 w-10 shrink-0"
               onClick={handleAudioToggle}
               title="Gravar áudio"
+              disabled={sending}
             >
               <Mic className="h-5 w-5" />
             </Button>
@@ -502,11 +609,11 @@ function MessageArea({
               onKeyDown={handleKeyDown}
               placeholder="Digite uma mensagem..."
               className="flex-1"
-              disabled={sendMessage.isPending}
+              disabled={sendMessage.isPending || sending}
             />
             <Button
               onClick={handleSend}
-              disabled={!text.trim() || sendMessage.isPending}
+              disabled={!text.trim() || sendMessage.isPending || sending}
               size="icon"
               className="h-10 w-10 shrink-0"
             >
