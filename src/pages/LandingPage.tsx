@@ -92,7 +92,7 @@ const fakeCompanies = [
 ];
 
 const faqs = [
-  { q: 'Preciso de cartão de crédito para começar?', a: 'Não! Você pode começar seu teste gratuito de 14 dias sem informar nenhum dado de pagamento. Só cobramos quando você decidir continuar.' },
+  { q: 'Preciso de cartão de crédito para começar?', a: 'Não! Você pode começar seu teste gratuito de 3 dias sem informar nenhum dado de pagamento. Só cobramos quando você decidir continuar.' },
   { q: 'Posso migrar meus dados de outro CRM?', a: 'Sim, oferecemos importação via CSV e nossa equipe ajuda gratuitamente na migração dos seus dados para o Flash CRMs.' },
   { q: 'O WhatsApp funciona com meu número atual?', a: 'Sim! Você conecta seu próprio número de WhatsApp via QR Code em menos de 2 minutos, sem precisar trocar de número.' },
   { q: 'Quantos usuários posso adicionar?', a: 'Depende do seu plano. O Básico suporta até 3 usuários, o Pro até 10, e o Enterprise tem usuários ilimitados.' },
@@ -174,7 +174,7 @@ export default function LandingPage() {
                 onClick={() => navigate('/registro')}
                 className="text-base gap-2 gradient-cta border-0 text-white hover:opacity-90 h-14 px-8 text-lg animate-glow-pulse"
               >
-                Começar grátis por 14 dias <ArrowRight className="h-5 w-5" />
+                Começar grátis por 3 dias <ArrowRight className="h-5 w-5" />
               </Button>
               <Button
                 size="lg"
@@ -189,7 +189,7 @@ export default function LandingPage() {
             {/* Trust badges */}
             <motion.div variants={fadeUp} className="flex flex-wrap justify-center gap-4 mt-10">
               {[
-                { icon: Shield, text: 'Garantia de 14 dias grátis' },
+                { icon: Shield, text: 'Garantia de 3 dias grátis' },
                 { icon: CreditCard, text: 'Sem cartão de crédito' },
                 { icon: MessageSquare, text: 'Suporte em português' },
               ].map((badge) => (
@@ -510,7 +510,7 @@ export default function LandingPage() {
               Comece hoje e veja resultados em 7 dias
             </motion.h2>
             <motion.p variants={fadeUp} className="text-white/60 text-lg mb-10 max-w-xl mx-auto">
-              Junte-se a centenas de empresas que já usam o Flash CRMs para fechar mais negócios. Teste grátis por 14 dias.
+              Junte-se a centenas de empresas que já usam o Flash CRMs para fechar mais negócios. Teste grátis por 3 dias.
             </motion.p>
             <motion.div variants={fadeUp}>
               <Button
@@ -522,7 +522,7 @@ export default function LandingPage() {
               </Button>
             </motion.div>
             <motion.div variants={fadeUp} className="flex flex-wrap justify-center gap-6 mt-8 text-sm text-white/50">
-              <span className="flex items-center gap-1.5"><Check className="h-4 w-4 text-emerald-400" /> 14 dias grátis</span>
+              <span className="flex items-center gap-1.5"><Check className="h-4 w-4 text-emerald-400" /> 3 dias grátis</span>
               <span className="flex items-center gap-1.5"><Check className="h-4 w-4 text-emerald-400" /> Sem cartão</span>
               <span className="flex items-center gap-1.5"><Check className="h-4 w-4 text-emerald-400" /> Cancele quando quiser</span>
             </motion.div>
