@@ -62,13 +62,38 @@ Deno.serve(async (req) => {
       let createData: any = {};
       if (!createRes.ok) {
         const errText = await createRes.text();
-        // If instance already exists (403/409), continue anyway
         const isAlreadyExists = errText.includes("already in use") || createRes.status === 409;
         if (!isAlreadyExists) {
           throw new Error(`Evolution API: ${errText}`);
         }
       } else {
         createData = await createRes.json();
+      }
+
+      // Check if already connected
+      const stateRes = await fetch(
+        `${evolution_url}/instance/connectionState/${instance_name}`,
+        { headers: { apikey: evolution_api_key } }
+      );
+      let initialStatus = "connecting";
+      if (stateRes.ok) {
+        const stateData = await stateRes.json();
+        if (stateData?.instance?.state === "open") {
+          initialStatus = "connected";
+        }
+      }
+
+      // If not connected, get QR code
+      let qrcode = createData.qrcode || null;
+      if (initialStatus !== "connected" && !qrcode) {
+        const qrRes = await fetch(
+          `${evolution_url}/instance/connect/${instance_name}`,
+          { headers: { apikey: evolution_api_key } }
+        );
+        if (qrRes.ok) {
+          const qrData = await qrRes.json();
+          qrcode = qrData.base64 || qrData.qrcode?.base64 || qrData;
+        }
       }
 
       // Save to DB
@@ -79,7 +104,7 @@ Deno.serve(async (req) => {
           evolution_url,
           evolution_api_key,
           instance_name,
-          status: "connecting",
+          status: initialStatus,
         })
         .select()
         .single();
@@ -88,7 +113,8 @@ Deno.serve(async (req) => {
 
       return new Response(JSON.stringify({
         instance: saved,
-        qrcode: createData.qrcode || createData,
+        qrcode: qrcode || {},
+        alreadyConnected: initialStatus === "connected",
       }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
