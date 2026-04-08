@@ -297,7 +297,6 @@ Deno.serve(async (req) => {
       if (!inst) throw new Error("Instância não encontrada");
 
       const cleanPhone = (phone || "").replace(/\D/g, "");
-      const cleanPhone = (phone || "").replace(/\D/g, "");
       if (!cleanPhone) throw new Error("Telefone inválido");
 
       const sendRes = await fetch(`${inst.evolution_url}/message/sendText/${inst.instance_name}`, {
