@@ -117,10 +117,21 @@ function InstanceCard({ instance, profiles, onRefresh }: {
     setQrLoading(true);
     try {
       const result = await callWhatsAppQrcode({ action: 'qrcode', instance_id: instance.id })();
+      if (result.error) throw new Error(result.error);
       const qr = result?.qrcode;
       const base64 = typeof qr === 'string' ? qr : qr?.base64 || null;
-      if (base64) setQrCode(base64.startsWith('data:') ? base64 : `data:image/png;base64,${base64}`);
-      else toast({ title: 'QR Code não disponível', variant: 'destructive' });
+      if (base64) {
+        setQrCode(base64.startsWith('data:') ? base64 : `data:image/png;base64,${base64}`);
+      } else {
+        // Check if already connected
+        const stateCheck = await callWhatsAppQrcode({ action: 'status', instance_id: instance.id })();
+        if (stateCheck.status === 'connected') {
+          setStatus('connected');
+          toast({ title: 'Número já conectado!' });
+        } else {
+          toast({ title: 'QR Code não disponível, tente novamente', variant: 'destructive' });
+        }
+      }
     } catch (err: any) {
       toast({ title: 'Erro', description: err.message, variant: 'destructive' });
     }
