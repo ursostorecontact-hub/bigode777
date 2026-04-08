@@ -11,6 +11,7 @@ import { Progress } from '@/components/ui/progress';
 import {
   QrCode, Smartphone, Loader2, CheckCircle2, XCircle, RefreshCw,
   Plus, Trash2, Users, Save, MessageSquare, Wifi, WifiOff, UserPlus, Phone,
+  User, Mail, PhoneCall, Calendar,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import {
@@ -18,8 +19,10 @@ import {
   useWhatsAppAssignments,
   useSaveWhatsAppAssignments,
 } from '@/hooks/use-integrations';
-import { useProfiles } from '@/hooks/use-leads';
+import { useProfiles, useLeads } from '@/hooks/use-leads';
+import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { formatCurrency, formatDate } from '@/types/crm';
 
 // ── helpers ──
 
