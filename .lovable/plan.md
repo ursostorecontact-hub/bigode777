@@ -1,32 +1,45 @@
 
-## Sistema de Distribuição WhatsApp + Leads
+## Chat WhatsApp Integrado ao App
 
-### 1. Banco de Dados
-- Tabela `whatsapp_instances`: adicionar suporte a múltiplos números conectados via Evolution API (já existe, será adaptada)
-- Nova tabela `whatsapp_assignments`: vincula vendedores a números de WhatsApp com porcentagem de distribuição
-  - `whatsapp_instance_id` → qual número
-  - `user_id` → qual vendedor
-  - `percentage` → % de leads que esse vendedor recebe nesse número (ex: 30%)
-  - Um número pode ter vários vendedores; um vendedor pode estar em vários números
+### O que será construído
+Um módulo de conversas WhatsApp completo dentro do aplicativo, onde os vendedores podem conversar com seus leads sem sair da plataforma.
 
-### 2. Página WhatsApp (Admin)
-- Conectar múltiplos números via QR Code (cada um é uma instância na Evolution API)
-- Para cada número conectado:
-  - Ver status (conectado/desconectado)
-  - Atribuir vendedores com slider de porcentagem (como já existe na página de Distribuição)
-  - Validação: porcentagens somam 100% por número
-- Opção de desconectar/reconectar cada número
+### Funcionalidades por fase
 
-### 3. Integração com Distribuição de Leads
-- Na página de Distribuição existente, exibir qual número WhatsApp está vinculado a cada vendedor
-- Quando um lead chega por WhatsApp, o sistema distribui automaticamente ao vendedor correto baseado na porcentagem configurada
+#### Fase 1 — Chat de texto básico (prioridade)
+- **Tela de conversas**: Lista de chats à esquerda, conversa aberta à direita (estilo WhatsApp Web)
+- **Enviar e receber mensagens de texto** via Evolution API
+- **Webhook para receber mensagens** em tempo real (Evolution API → Edge Function → banco → Realtime)
+- **Tabelas no banco**: `whatsapp_messages` (remetente, destinatário, conteúdo, timestamp, status) e `whatsapp_chats` (último contato, última mensagem)
+- **Vendedor vê apenas seus leads** (RLS baseado em `assigned_to`)
 
-### 4. Envio de Mensagens
-- Quando vendedor envia mensagem a um lead, usa o número de WhatsApp ao qual está vinculado
-- Se o vendedor está em mais de um número, usa o número pelo qual o lead chegou
+#### Fase 2 — Mídia e áudio
+- **Enviar/receber áudio** (gravação no navegador + envio via API)
+- **Enviar/receber imagens, vídeos e documentos**
+- **Storage** para armazenar mídias recebidas
+- **Preview de mídia** na conversa
+
+#### Fase 3 — Funcionalidades avançadas
+- **Status de mensagem** (enviado, entregue, lido — via webhook `MESSAGES_UPDATE`)
+- **Contatos** — salvar/visualizar contatos do WhatsApp
+- **Chamadas** — iniciar chamada via link `tel:` ou integração
+- **Indicador de digitando** (typing)
+- **Notificações** no app quando chega mensagem
+
+### Infraestrutura necessária
+1. **Edge Function `whatsapp-webhook`** — recebe eventos da Evolution API (mensagens recebidas, status updates)
+2. **Tabelas**: `whatsapp_messages`, `whatsapp_chats` com Realtime habilitado
+3. **Edge Function `whatsapp-send`** — envia mensagens via Evolution API
+4. **RLS** — vendedores veem apenas conversas dos seus leads
 
 ### Ordem de implementação
-1. Migration do banco (tabela `whatsapp_assignments`)
-2. Edge function para gerenciar múltiplas instâncias
-3. UI da página WhatsApp com gestão de números e atribuições
-4. Integração com página de Distribuição
+1. Criar tabelas `whatsapp_chats` e `whatsapp_messages` com RLS
+2. Edge Function para receber webhooks da Evolution API
+3. Edge Function para enviar mensagens
+4. UI do chat (lista de conversas + área de mensagens)
+5. Configurar webhook na Evolution API apontando para nossa Edge Function
+
+### Observações
+- A página `/whatsapp` atual (admin) continua para gestão de números e distribuição
+- Nova rota `/conversas` acessível a todos os vendedores
+- O vendedor usa o número de WhatsApp ao qual está vinculado para enviar mensagens
