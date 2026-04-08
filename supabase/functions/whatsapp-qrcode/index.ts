@@ -194,11 +194,12 @@ Deno.serve(async (req) => {
       );
 
       let newStatus = "disconnected";
+      let rawData: any = null;
       if (statusRes.ok) {
-        const statusData = await statusRes.json();
-        newStatus = statusData.instance?.state === "open" ? "connected" : "disconnected";
+        rawData = await statusRes.json();
+        newStatus = rawData.instance?.state === "open" ? "connected" : "disconnected";
       } else {
-        await statusRes.text(); // consume body, instance may not exist yet
+        await statusRes.text();
       }
 
       await adminClient
@@ -206,7 +207,60 @@ Deno.serve(async (req) => {
         .update({ status: newStatus })
         .eq("id", instance_id);
 
-      return new Response(JSON.stringify({ status: newStatus, raw: statusData }), {
+      return new Response(JSON.stringify({ status: newStatus, raw: rawData }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (action === "pairing_code") {
+      const { data: inst } = await adminClient
+        .from("whatsapp_instances")
+        .select("*")
+        .eq("id", instance_id)
+        .single();
+
+      if (!inst) throw new Error("Instância não encontrada");
+
+      const { phone } = await req.json().catch(() => ({}));
+      if (!phone) throw new Error("Informe o número de telefone");
+
+      const cleanPhone = phone.replace(/\D/g, "");
+
+      // Ensure instance exists
+      const checkRes = await fetch(
+        `${inst.evolution_url}/instance/connectionState/${inst.instance_name}`,
+        { headers: { apikey: inst.evolution_api_key } }
+      );
+      if (!checkRes.ok) {
+        await fetch(`${inst.evolution_url}/instance/create`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", apikey: inst.evolution_api_key },
+          body: JSON.stringify({
+            instanceName: inst.instance_name,
+            integration: "WHATSAPP-BAILEYS",
+            qrcode: false,
+          }),
+        });
+      } else {
+        await checkRes.text();
+      }
+
+      // Request pairing code
+      const pairRes = await fetch(
+        `${inst.evolution_url}/instance/connect/${inst.instance_name}`,
+        {
+          method: "GET",
+          headers: { apikey: inst.evolution_api_key },
+        }
+      );
+
+      if (!pairRes.ok) {
+        const err = await pairRes.text();
+        throw new Error(`Evolution API: ${err}`);
+      }
+
+      const pairData = await pairRes.json();
+      return new Response(JSON.stringify({ pairingCode: pairData.pairingCode || null }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
