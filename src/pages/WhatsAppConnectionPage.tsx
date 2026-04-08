@@ -71,10 +71,12 @@ export default function WhatsAppConnectionPage() {
     setQrLoading(true);
     try {
       const result = await callFunction({ action: 'qrcode' });
-      if (result.qrcode) {
+      if (result.error) {
+        toast({ title: 'Erro ao conectar', description: result.error, variant: 'destructive' });
+      } else if (result.qrcode) {
         setQrCode(result.qrcode);
       } else {
-        toast({ title: 'QR Code não disponível', variant: 'destructive' });
+        toast({ title: 'QR Code não disponível. Tente novamente em alguns segundos.', variant: 'destructive' });
       }
     } catch (err: any) {
       toast({ title: 'Erro', description: err.message, variant: 'destructive' });

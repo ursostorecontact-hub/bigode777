@@ -92,20 +92,51 @@ Deno.serve(async (req) => {
 
     // Create instance if it doesn't exist, then get QR code
     if (action === "qrcode") {
-      // Try to create instance (will fail silently if exists)
+      // First check if instance exists
+      let instanceExists = false;
       try {
-        await fetch(`${EVOLUTION_URL}/instance/create`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", apikey: EVOLUTION_API_KEY },
-          body: JSON.stringify({
-            instanceName: INSTANCE_NAME,
-            integration: "WHATSAPP-BAILEYS",
-            qrcode: true,
-          }),
-        });
-      } catch (_) { /* instance may already exist */ }
+        const checkRes = await fetch(
+          `${EVOLUTION_URL}/instance/connectionState/${INSTANCE_NAME}`,
+          { headers: { apikey: EVOLUTION_API_KEY } }
+        );
+        if (checkRes.ok) {
+          instanceExists = true;
+        }
+        await checkRes.text(); // consume body
+      } catch (_) { /* instance doesn't exist */ }
 
-      // Get QR code
+      // Only create if instance doesn't exist
+      if (!instanceExists) {
+        try {
+          const createRes = await fetch(`${EVOLUTION_URL}/instance/create`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", apikey: EVOLUTION_API_KEY },
+            body: JSON.stringify({
+              instanceName: INSTANCE_NAME,
+              integration: "WHATSAPP-BAILEYS",
+              qrcode: true,
+            }),
+          });
+          const createText = await createRes.text();
+          console.log("Create instance response:", createRes.status, createText);
+          if (!createRes.ok && createRes.status !== 409) {
+            // 409 = already exists, which is fine
+            throw new Error(`Erro ao criar instância: ${createText}`);
+          }
+        } catch (e: any) {
+          if (!e.message?.includes("409")) {
+            console.error("Create instance error:", e.message);
+            return new Response(JSON.stringify({ 
+              error: e.message || "Não foi possível criar a instância. Verifique se a Evolution API está funcionando.",
+              fallback: true,
+            }), {
+              status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+        }
+      }
+
+      // Get QR code by connecting
       const qrRes = await fetch(
         `${EVOLUTION_URL}/instance/connect/${INSTANCE_NAME}`,
         { headers: { apikey: EVOLUTION_API_KEY } }
@@ -113,7 +144,13 @@ Deno.serve(async (req) => {
 
       if (!qrRes.ok) {
         const err = await qrRes.text();
-        throw new Error(`Erro ao obter QR Code: ${err}`);
+        console.error("QR code error:", qrRes.status, err);
+        return new Response(JSON.stringify({ 
+          error: `Erro ao obter QR Code: ${err}`,
+          fallback: true,
+        }), {
+          status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
 
       const qrData = await qrRes.json();
@@ -130,19 +167,6 @@ Deno.serve(async (req) => {
       if (!phone) throw new Error("Número de telefone obrigatório");
       
       const cleanPhone = phone.replace(/\D/g, "");
-      
-      // Ensure instance exists
-      try {
-        await fetch(`${EVOLUTION_URL}/instance/create`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", apikey: EVOLUTION_API_KEY },
-          body: JSON.stringify({
-            instanceName: INSTANCE_NAME,
-            integration: "WHATSAPP-BAILEYS",
-            qrcode: false,
-          }),
-        });
-      } catch (_) { /* instance may already exist */ }
 
       // Request pairing code
       const pairRes = await fetch(
