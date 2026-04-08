@@ -44,7 +44,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { action, instance_id, evolution_url, evolution_api_key, instance_name, name } = await req.json();
+    const { action, instance_id, evolution_url, evolution_api_key, instance_name, name, phone, message } = await req.json();
 
     if (action === "create") {
       // Try to create instance on Evolution API (ignore if already exists)
@@ -220,7 +220,6 @@ Deno.serve(async (req) => {
 
       if (!inst) throw new Error("Instância não encontrada");
 
-      const { phone } = await req.json().catch(() => ({}));
       if (!phone) throw new Error("Informe o número de telefone");
 
       const cleanPhone = phone.replace(/\D/g, "");
@@ -297,7 +296,7 @@ Deno.serve(async (req) => {
 
       if (!inst) throw new Error("Instância não encontrada");
 
-      const { phone, message } = await req.json().catch(() => ({}));
+      const cleanPhone = (phone || "").replace(/\D/g, "");
       const cleanPhone = (phone || "").replace(/\D/g, "");
       if (!cleanPhone) throw new Error("Telefone inválido");
 
