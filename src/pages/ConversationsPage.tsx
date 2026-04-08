@@ -16,6 +16,7 @@ import { Label } from '@/components/ui/label';
 import {
   MessageSquare, Send, Loader2, Search, Phone, ArrowLeft,
   Check, CheckCheck, Clock, Mic, MicOff, UserPlus, Paperclip,
+  Image as ImageIcon, Video, FileText, X,
 } from 'lucide-react';
 import {
   useWhatsAppChats,
