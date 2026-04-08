@@ -18,27 +18,25 @@ function WhatsAppSection() {
 
   const [showNew, setShowNew] = useState(false);
   const [name, setName] = useState('');
-  const [evolutionUrl, setEvolutionUrl] = useState('');
-  const [evolutionApiKey, setEvolutionApiKey] = useState('');
   const [instanceName, setInstanceName] = useState('');
   const [qrData, setQrData] = useState<{ id: string; qr: string } | null>(null);
 
   const handleCreate = async () => {
-    if (!name || !evolutionUrl || !evolutionApiKey || !instanceName) {
+    if (!name || !instanceName) {
       toast({ title: 'Preencha todos os campos', variant: 'destructive' });
       return;
     }
     const result = await createInstance.mutateAsync({
       name,
-      evolution_url: evolutionUrl.replace(/\/+$/, ''),
-      evolution_api_key: evolutionApiKey,
+      evolution_url: 'http://76.13.230.7:64644',
+      evolution_api_key: 'bigodao77chave',
       instance_name: instanceName,
     });
     if (result.qrcode?.base64) {
       setQrData({ id: result.instance.id, qr: result.qrcode.base64 });
     }
     setShowNew(false);
-    setName(''); setEvolutionUrl(''); setEvolutionApiKey(''); setInstanceName('');
+    setName(''); setInstanceName('');
   };
 
   const handleGetQR = async (id: string) => {
