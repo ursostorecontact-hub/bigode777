@@ -21,6 +21,11 @@ function WhatsAppSection() {
   const [instanceName, setInstanceName] = useState('');
   const [qrData, setQrData] = useState<{ id: string; qr: string } | null>(null);
 
+  const normalizeQrSrc = (value?: string | null) => {
+    if (!value) return null;
+    return value.startsWith('data:') ? value : `data:image/png;base64,${value}`;
+  };
+
   const handleCreate = async () => {
     if (!name || !instanceName) {
       toast({ title: 'Preencha todos os campos', variant: 'destructive' });
@@ -32,17 +37,23 @@ function WhatsAppSection() {
       evolution_api_key: 'bigodao77chave',
       instance_name: instanceName,
     });
-    if (result.qrcode?.base64) {
-      setQrData({ id: result.instance.id, qr: result.qrcode.base64 });
+
+    const qrSrc = normalizeQrSrc(result.qrcode?.base64);
+    if (qrSrc) {
+      setQrData({ id: result.instance.id, qr: qrSrc });
     }
+
     setShowNew(false);
-    setName(''); setInstanceName('');
+    setName('');
+    setInstanceName('');
   };
 
   const handleGetQR = async (id: string) => {
     const result = await whatsappAction.mutateAsync({ action: 'qrcode', instance_id: id });
-    if (result.qrcode?.base64) {
-      setQrData({ id, qr: result.qrcode.base64 });
+    const qrSrc = normalizeQrSrc(result.qrcode?.base64);
+
+    if (qrSrc) {
+      setQrData({ id, qr: qrSrc });
     } else {
       toast({ title: 'QR Code não disponível. Verifique o status da instância.' });
     }
@@ -78,7 +89,7 @@ function WhatsAppSection() {
           <CardContent className="flex flex-col items-center py-6">
             <QrCode className="h-6 w-6 text-primary mb-2" />
             <p className="text-sm font-medium mb-3">Escaneie o QR Code com seu WhatsApp</p>
-            <img src={`data:image/png;base64,${qrData.qr}`} alt="QR Code" className="w-64 h-64 rounded-lg border" />
+            <img src={qrData.qr} alt="QR Code" className="w-64 h-64 rounded-lg border" />
             <Button variant="outline" size="sm" className="mt-3" onClick={() => setQrData(null)}>Fechar</Button>
           </CardContent>
         </Card>
