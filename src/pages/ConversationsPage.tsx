@@ -472,7 +472,7 @@ function MessageArea({
                       }`}
                     >
                       {msg.message_type === 'audio' && msg.media_url ? (
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 min-w-[200px]">
                           <Mic className="h-4 w-4 shrink-0 opacity-70" />
                           <audio controls preload="none" className="h-8 max-w-[220px]" src={msg.media_url}>
                             Seu navegador não suporta áudio.
@@ -483,10 +483,48 @@ function MessageArea({
                           <Mic className="h-4 w-4 shrink-0 opacity-70" />
                           <span className="text-sm">🎤 Áudio</span>
                         </div>
+                      ) : msg.message_type === 'image' && msg.media_url ? (
+                        <div>
+                          <a href={msg.media_url} target="_blank" rel="noopener noreferrer">
+                            <img
+                              src={msg.media_url}
+                              alt="Imagem"
+                              className="rounded-lg max-w-[250px] max-h-[300px] object-cover cursor-pointer"
+                              loading="lazy"
+                            />
+                          </a>
+                          {msg.content && msg.content !== '📷 Imagem' && (
+                            <p className="whitespace-pre-wrap break-words mt-1">{msg.content}</p>
+                          )}
+                        </div>
+                      ) : msg.message_type === 'video' && msg.media_url ? (
+                        <div>
+                          <video
+                            controls
+                            preload="none"
+                            className="rounded-lg max-w-[250px] max-h-[300px]"
+                            src={msg.media_url}
+                          />
+                          {msg.content && msg.content !== '🎥 Vídeo' && (
+                            <p className="whitespace-pre-wrap break-words mt-1">{msg.content}</p>
+                          )}
+                        </div>
+                      ) : msg.message_type === 'document' && msg.media_url ? (
+                        <a
+                          href={msg.media_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2 underline"
+                        >
+                          <FileText className="h-4 w-4 shrink-0" />
+                          <span className="text-sm">{msg.content || '📄 Documento'}</span>
+                        </a>
                       ) : (
                         <>
                           {msg.message_type !== 'text' && (
-                            <p className="text-xs opacity-70 mb-0.5">{msg.message_type}</p>
+                            <p className="text-xs opacity-70 mb-0.5">
+                              {msg.message_type === 'image' ? '📷 Imagem' : msg.message_type === 'video' ? '🎥 Vídeo' : msg.message_type}
+                            </p>
                           )}
                           <p className="whitespace-pre-wrap break-words">{msg.content}</p>
                         </>
