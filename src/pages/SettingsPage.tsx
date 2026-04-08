@@ -7,7 +7,8 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Building2, Users, Link, Key, Loader2, UserPlus, Trash2 } from 'lucide-react';
+import { Building2, Users, Link, Key, Loader2, UserPlus, Trash2, Smartphone } from 'lucide-react';
+import { WhatsAppSettingsSection } from '@/components/WhatsAppSettingsSection';
 import { Switch } from '@/components/ui/switch';
 import { useSettings, useUpdateSettings, useProfilesWithRoles } from '@/hooks/use-leads';
 import { useToast } from '@/hooks/use-toast';
@@ -250,6 +251,9 @@ export default function SettingsPage() {
           </Button>
         </CardContent>
       </Card>
+
+      {/* WhatsApp Connection */}
+      <WhatsAppSettingsSection />
 
       {/* Dialog para criar novo usuário */}
       <Dialog open={showNewUser} onOpenChange={setShowNewUser}>
