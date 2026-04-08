@@ -243,9 +243,9 @@ Deno.serve(async (req) => {
         await checkRes.text();
       }
 
-      // Request pairing code
+      // Request pairing code with phone number
       const pairRes = await fetch(
-        `${inst.evolution_url}/instance/connect/${inst.instance_name}`,
+        `${inst.evolution_url}/instance/connect/${inst.instance_name}?number=${cleanPhone}`,
         {
           method: "GET",
           headers: { apikey: inst.evolution_api_key },
