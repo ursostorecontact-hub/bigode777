@@ -74,6 +74,37 @@ Deno.serve(async (req) => {
 
     console.log(`Syncing chats for instance: ${instance.instance_name}`);
 
+    // 0. Fetch contacts from WhatsApp address book
+    const contactMap: Record<string, string> = {};
+    try {
+      const contactsRes = await fetch(
+        `${instance.evolution_url}/chat/findContacts/${instance.instance_name}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: instance.evolution_api_key,
+          },
+          body: JSON.stringify({}),
+        }
+      );
+      const contactsData = await contactsRes.json();
+      const contactsList = Array.isArray(contactsData) ? contactsData : (contactsData?.contacts || contactsData?.data || []);
+      console.log(`Found ${contactsList.length} contacts in address book`);
+      for (const c of contactsList) {
+        const jid = c.id || c.remoteJid || c.jid || "";
+        const name = c.pushName || c.name || c.notify || c.verifiedName || c.shortName || "";
+        if (jid && name) {
+          contactMap[jid] = name;
+          // Also map the phone number without @suffix
+          const phone = jid.split("@")[0];
+          if (phone) contactMap[phone] = name;
+        }
+      }
+    } catch (contactErr) {
+      console.error("Contact fetch error (non-fatal):", contactErr);
+    }
+
     // 1. Fetch all chats from Evolution API (try POST first, then GET)
     let chats: any[] = [];
     
@@ -115,7 +146,7 @@ Deno.serve(async (req) => {
     }
 
     if (chats.length === 0) {
-      return new Response(JSON.stringify({ ok: true, synced_chats: 0, synced_messages: 0, message: "No chats found from API" }), {
+      return new Response(JSON.stringify({ ok: true, synced_chats: 0, synced_messages: 0, synced_contacts: Object.keys(contactMap).length, message: "No chats found from API" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -140,7 +171,8 @@ Deno.serve(async (req) => {
         const altJid = chat.lastMessage?.key?.remoteJidAlt || "";
         const phoneJid = altJid.includes("@s.whatsapp.net") ? altJid : remoteJid;
         const contactPhone = phoneJid.split("@")[0];
-        const contactName = chat.pushName || chat.name || chat.contact || contactPhone;
+        // Resolve name: address book > pushName > chat name > phone
+        const contactName = contactMap[remoteJid] || contactMap[contactPhone] || chat.pushName || chat.name || chat.contact || contactPhone;
 
         // Upsert chat
         const { data: dbChat, error: chatErr } = await supabase
@@ -292,10 +324,28 @@ Deno.serve(async (req) => {
       }
     }
 
-    console.log(`Sync complete: ${syncedChats} chats, ${syncedMessages} messages`);
+    // 3. Update existing chats that have no contact_name using the address book
+    let updatedNames = 0;
+    if (Object.keys(contactMap).length > 0) {
+      const { data: namelessChats } = await supabase
+        .from("whatsapp_chats")
+        .select("id, remote_jid, contact_phone")
+        .eq("whatsapp_instance_id", instance.id)
+        .or("contact_name.is.null,contact_name.eq.");
+
+      for (const nc of (namelessChats || [])) {
+        const resolvedName = contactMap[nc.remote_jid] || contactMap[nc.contact_phone || ""];
+        if (resolvedName) {
+          await supabase.from("whatsapp_chats").update({ contact_name: resolvedName }).eq("id", nc.id);
+          updatedNames++;
+        }
+      }
+    }
+
+    console.log(`Sync complete: ${syncedChats} chats, ${syncedMessages} messages, ${updatedNames} names updated`);
 
     return new Response(
-      JSON.stringify({ ok: true, synced_chats: syncedChats, synced_messages: syncedMessages }),
+      JSON.stringify({ ok: true, synced_chats: syncedChats, synced_messages: syncedMessages, updated_names: updatedNames, contacts_found: Object.keys(contactMap).length }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
