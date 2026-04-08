@@ -281,28 +281,90 @@ function InstanceCard({ instance, profiles, onRefresh }: {
           </Button>
         </div>
 
-        {/* QR Code (only when disconnected) */}
+        {/* Connection area (only when disconnected) */}
         {!isConnected && (
-          <div className="flex flex-col items-center gap-3 py-4 rounded-xl bg-muted/30 border border-dashed border-muted-foreground/20">
-            {qrCode ? (
-              <>
-                <img src={qrCode} alt="QR Code" className="w-52 h-52 rounded-xl shadow-lg" />
-                <p className="text-[11px] text-muted-foreground">Escaneie com seu WhatsApp • Atualiza a cada 30s</p>
-                <Button variant="outline" size="sm" onClick={fetchQr} disabled={qrLoading} className="gap-1.5">
-                  {qrLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
-                  Atualizar QR
-                </Button>
-              </>
-            ) : (
-              <>
-                <QrCode className="h-10 w-10 text-muted-foreground/40" />
-                <p className="text-sm text-muted-foreground">Escaneie o QR Code para conectar</p>
-                <Button onClick={startQr} disabled={qrLoading} className="gap-2">
-                  {qrLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <QrCode className="h-4 w-4" />}
-                  Gerar QR Code
-                </Button>
-              </>
-            )}
+          <div className="rounded-xl bg-muted/30 border border-dashed border-muted-foreground/20 overflow-hidden">
+            {/* Tabs: QR Code / Código */}
+            <div className="flex border-b border-muted-foreground/10">
+              <button
+                onClick={() => setConnectMode('qr')}
+                className={`flex-1 py-2.5 text-xs font-medium flex items-center justify-center gap-1.5 transition-colors ${connectMode === 'qr' ? 'bg-background text-foreground border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                <QrCode className="h-3.5 w-3.5" />
+                QR Code
+              </button>
+              <button
+                onClick={() => setConnectMode('code')}
+                className={`flex-1 py-2.5 text-xs font-medium flex items-center justify-center gap-1.5 transition-colors ${connectMode === 'code' ? 'bg-background text-foreground border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                <Phone className="h-3.5 w-3.5" />
+                Código (remoto)
+              </button>
+            </div>
+
+            <div className="p-4">
+              {connectMode === 'qr' ? (
+                <div className="flex flex-col items-center gap-3">
+                  {qrCode ? (
+                    <>
+                      <img src={qrCode} alt="QR Code" className="w-52 h-52 rounded-xl shadow-lg" />
+                      <p className="text-[11px] text-muted-foreground">Escaneie com seu WhatsApp • Atualiza a cada 30s</p>
+                      <Button variant="outline" size="sm" onClick={fetchQr} disabled={qrLoading} className="gap-1.5">
+                        {qrLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+                        Atualizar QR
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <QrCode className="h-10 w-10 text-muted-foreground/40" />
+                      <p className="text-sm text-muted-foreground">Escaneie o QR Code para conectar</p>
+                      <Button onClick={startQr} disabled={qrLoading} className="gap-2">
+                        {qrLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <QrCode className="h-4 w-4" />}
+                        Gerar QR Code
+                      </Button>
+                    </>
+                  )}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-4">
+                  <Phone className="h-10 w-10 text-muted-foreground/40" />
+                  <p className="text-sm text-muted-foreground text-center">
+                    Conecte à distância: insira o número e digite o código no WhatsApp do celular
+                  </p>
+                  <div className="w-full max-w-xs space-y-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Número com código do país</Label>
+                      <Input
+                        value={pairingPhone}
+                        onChange={(e) => setPairingPhone(e.target.value)}
+                        placeholder="5511999999999"
+                        className="text-center text-sm"
+                      />
+                    </div>
+                    {pairingCode ? (
+                      <div className="text-center space-y-2">
+                        <p className="text-xs text-muted-foreground">Digite este código no WhatsApp:</p>
+                        <p className="text-3xl font-mono font-bold tracking-[0.3em] text-primary select-all">
+                          {pairingCode}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground">
+                          Abra WhatsApp → ⋮ → Aparelhos conectados → Conectar → Conectar com número
+                        </p>
+                        <Button variant="outline" size="sm" onClick={fetchPairingCode} disabled={pairingLoading} className="gap-1.5">
+                          {pairingLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+                          Gerar novo código
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button onClick={fetchPairingCode} disabled={pairingLoading || !pairingPhone} className="w-full gap-2">
+                        {pairingLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Phone className="h-4 w-4" />}
+                        Gerar Código
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
