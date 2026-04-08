@@ -2,18 +2,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import type { Tables } from '@/integrations/supabase/types';
 
-interface Automation {
-  id: string;
-  name: string;
-  trigger_type: string;
-  action_type: string;
-  config: Record<string, string>;
-  message_template: string | null;
-  active: boolean;
-  inactive_days: number | null;
-  created_at: string;
-}
+type Automation = Tables<'automations'>;
 
 export function useAutomations() {
   const { user } = useAuth();
@@ -21,11 +12,11 @@ export function useAutomations() {
     queryKey: ['automations'],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('automations' as any)
+        .from('automations')
         .select('*')
         .order('created_at', { ascending: false });
       if (error) throw error;
-      return data as unknown as Automation[];
+      return data as Automation[];
     },
     enabled: !!user,
   });
@@ -44,8 +35,8 @@ export function useCreateAutomation() {
       inactive_days: number | null;
     }) => {
       const { data, error } = await supabase
-        .from('automations' as any)
-        .insert(automation as any)
+        .from('automations')
+        .insert(automation)
         .select()
         .single();
       if (error) throw error;
@@ -67,8 +58,8 @@ export function useUpdateAutomation() {
   return useMutation({
     mutationFn: async ({ id, ...updates }: { id: string; [key: string]: any }) => {
       const { error } = await supabase
-        .from('automations' as any)
-        .update(updates as any)
+        .from('automations')
+        .update(updates)
         .eq('id', id);
       if (error) throw error;
     },
@@ -87,7 +78,7 @@ export function useDeleteAutomation() {
   return useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase
-        .from('automations' as any)
+        .from('automations')
         .delete()
         .eq('id', id);
       if (error) throw error;
@@ -102,7 +93,6 @@ export function useDeleteAutomation() {
   });
 }
 
-// Function to trigger automations from the app
 export async function triggerAutomation(
   triggerType: string,
   leadData: Record<string, any>,

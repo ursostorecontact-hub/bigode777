@@ -49,9 +49,6 @@ export default function AutomationsPage() {
 
   // Config fields
   const [webhookUrl, setWebhookUrl] = useState('');
-  const [evolutionUrl, setEvolutionUrl] = useState('');
-  const [evolutionApiKey, setEvolutionApiKey] = useState('');
-  const [evolutionInstance, setEvolutionInstance] = useState('');
   const [twilioFrom, setTwilioFrom] = useState('');
 
   const resetForm = () => {
