@@ -271,7 +271,7 @@ function ChatList({
             >
               <Avatar className="h-11 w-11 shrink-0">
                 <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">
-                  {initials(chat.contact_name || chat.contact_phone || '')}
+                  {initials(getDisplayName(chat))}
                 </AvatarFallback>
               </Avatar>
               <div className="flex-1 min-w-0">
