@@ -324,10 +324,28 @@ Deno.serve(async (req) => {
       }
     }
 
-    console.log(`Sync complete: ${syncedChats} chats, ${syncedMessages} messages`);
+    // 3. Update existing chats that have no contact_name using the address book
+    let updatedNames = 0;
+    if (Object.keys(contactMap).length > 0) {
+      const { data: namelessChats } = await supabase
+        .from("whatsapp_chats")
+        .select("id, remote_jid, contact_phone")
+        .eq("whatsapp_instance_id", instance.id)
+        .or("contact_name.is.null,contact_name.eq.");
+
+      for (const nc of (namelessChats || [])) {
+        const resolvedName = contactMap[nc.remote_jid] || contactMap[nc.contact_phone || ""];
+        if (resolvedName) {
+          await supabase.from("whatsapp_chats").update({ contact_name: resolvedName }).eq("id", nc.id);
+          updatedNames++;
+        }
+      }
+    }
+
+    console.log(`Sync complete: ${syncedChats} chats, ${syncedMessages} messages, ${updatedNames} names updated`);
 
     return new Response(
-      JSON.stringify({ ok: true, synced_chats: syncedChats, synced_messages: syncedMessages }),
+      JSON.stringify({ ok: true, synced_chats: syncedChats, synced_messages: syncedMessages, updated_names: updatedNames, contacts_found: Object.keys(contactMap).length }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
