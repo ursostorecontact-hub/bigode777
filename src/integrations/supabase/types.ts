@@ -370,6 +370,8 @@ export type Database = {
         Row: {
           api_key: string | null
           company_name: string
+          facebook_access_token: string | null
+          facebook_pixel_id: string | null
           id: string
           logo_url: string | null
           tenant_id: string | null
@@ -378,6 +380,8 @@ export type Database = {
         Insert: {
           api_key?: string | null
           company_name?: string
+          facebook_access_token?: string | null
+          facebook_pixel_id?: string | null
           id?: string
           logo_url?: string | null
           tenant_id?: string | null
@@ -386,6 +390,8 @@ export type Database = {
         Update: {
           api_key?: string | null
           company_name?: string
+          facebook_access_token?: string | null
+          facebook_pixel_id?: string | null
           id?: string
           logo_url?: string | null
           tenant_id?: string | null
