@@ -32,6 +32,7 @@ import {
   MessageSquare,
   Smartphone,
   ShieldCheck,
+  Target,
 } from 'lucide-react';
 import flashLogo from '@/assets/flash-logo.png';
 import { Button } from '@/components/ui/button';
