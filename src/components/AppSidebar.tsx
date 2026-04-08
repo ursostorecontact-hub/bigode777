@@ -32,6 +32,7 @@ import {
   MessageSquare,
   Smartphone,
   ShieldCheck,
+  Target,
 } from 'lucide-react';
 import flashLogo from '@/assets/flash-logo.png';
 import { Button } from '@/components/ui/button';
@@ -45,6 +46,7 @@ const mainNav = [
   { title: 'Clientes', url: '/clientes', icon: UserCheck },
   { title: 'Tarefas', url: '/tarefas', icon: CheckSquare },
   { title: 'Relatórios', url: '/relatorios', icon: BarChart3 },
+  { title: 'Audiências Facebook', url: '/audiencias-facebook', icon: Target, roles: ['admin'] },
 ];
 
 const bottomNav = [
