@@ -128,9 +128,10 @@ Deno.serve(async (req) => {
     for (const chat of chats) {
       try {
         // Evolution API v2: chat has remoteJid field, id is internal
-        const remoteJid = chat.remoteJid || chat.id || "";
+        const remoteJid = chat.remoteJid || "";
 
-        // Skip groups, broadcasts, and internal IDs without @
+        // Only sync individual WhatsApp contacts (@s.whatsapp.net or @lid)
+        // Skip groups (@g.us), broadcasts, and internal IDs without @
         if (!remoteJid || !remoteJid.includes("@") || remoteJid.includes("@g.us") || remoteJid === "status@broadcast") {
           continue;
         }
