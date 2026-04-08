@@ -84,6 +84,10 @@ export default function LoginPage() {
               <Button type="button" variant="ghost" className="w-full" onClick={() => setIsRecovery(!isRecovery)}>
                 {isRecovery ? 'Voltar ao login' : 'Esqueceu a senha?'}
               </Button>
+              <p className="text-sm text-center text-muted-foreground">
+                Não tem conta?{' '}
+                <a href="/registro" className="text-primary hover:underline">Criar conta</a>
+              </p>
             </form>
           </CardContent>
         </Card>
