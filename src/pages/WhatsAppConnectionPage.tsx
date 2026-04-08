@@ -133,6 +133,10 @@ function InstanceCard({ instance, profiles, onRefresh }: {
   const [localAssignments, setLocalAssignments] = useState<Record<string, number>>({});
   const [showAddSeller, setShowAddSeller] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [connectMode, setConnectMode] = useState<'qr' | 'code'>('qr');
+  const [pairingCode, setPairingCode] = useState<string | null>(null);
+  const [pairingPhone, setPairingPhone] = useState('');
+  const [pairingLoading, setPairingLoading] = useState(false);
   const qrInterval = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const isConnected = status === 'connected';
