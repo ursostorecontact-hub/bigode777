@@ -170,6 +170,7 @@ function FacebookSection() {
   const deleteWebhook = useDeleteFacebookWebhook();
   const { toast } = useToast();
   const [pageName, setPageName] = useState('');
+  const [currentStep, setCurrentStep] = useState(0);
 
   const webhookBaseUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/facebook-webhook`;
 
@@ -177,72 +178,164 @@ function FacebookSection() {
     if (!pageName) { toast({ title: 'Informe o nome da página', variant: 'destructive' }); return; }
     createWebhook.mutate(pageName);
     setPageName('');
+    setCurrentStep(1);
   };
 
-  const copyToClipboard = (text: string) => {
+  const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
-    toast({ title: 'Copiado!' });
+    toast({ title: `${label} copiado!` });
   };
 
   if (isLoading) return <Loader2 className="h-6 w-6 animate-spin text-primary mx-auto" />;
 
+  const hasWebhooks = (webhooks || []).length > 0;
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <div>
-        <h2 className="text-lg font-semibold text-foreground">Facebook Lead Ads</h2>
-        <p className="text-sm text-muted-foreground">Receba leads do Facebook automaticamente via webhook gratuito</p>
+        <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+          <Facebook className="h-5 w-5 text-blue-600" />
+          Facebook Lead Ads
+        </h2>
+        <p className="text-sm text-muted-foreground mt-1">
+          Capture leads automaticamente dos formulários do Facebook e receba direto no CRM
+        </p>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm">Como configurar</CardTitle>
+      {/* Step-by-step guide */}
+      <Card className="border-blue-200 bg-blue-50/30 dark:bg-blue-950/10 dark:border-blue-900">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <span className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold">?</span>
+            Guia Passo a Passo
+          </CardTitle>
+          <CardDescription className="text-xs">Siga estes passos para conectar sua página do Facebook</CardDescription>
         </CardHeader>
-        <CardContent className="text-sm text-muted-foreground space-y-2">
-          <p>1. Crie um webhook abaixo para sua página do Facebook</p>
-          <p>2. No <strong>Facebook Business Manager</strong>, vá em Configurações → Webhooks</p>
-          <p>3. Cole a <strong>URL de Callback</strong> e o <strong>Token de Verificação</strong></p>
-          <p>4. Inscreva-se no campo <strong>leadgen</strong></p>
-          <p>5. Os leads aparecerão automaticamente no CRM com origem "Facebook"</p>
+        <CardContent className="space-y-3 text-sm">
+          {/* Step 1 */}
+          <div className={`flex gap-3 p-3 rounded-lg transition-colors ${currentStep === 0 ? 'bg-blue-100/50 dark:bg-blue-900/20 ring-1 ring-blue-300' : 'bg-background/50'}`}>
+            <span className={`flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold shrink-0 ${hasWebhooks ? 'bg-green-500 text-white' : 'bg-blue-600 text-white'}`}>
+              {hasWebhooks ? '✓' : '1'}
+            </span>
+            <div className="space-y-2 flex-1">
+              <p className="font-medium">Crie um webhook para sua página</p>
+              <p className="text-muted-foreground text-xs">Digite o nome da sua página do Facebook abaixo e clique em "Criar Webhook". Isso gera uma URL e um token únicos.</p>
+              {!hasWebhooks && (
+                <div className="flex gap-2 mt-2">
+                  <Input value={pageName} onChange={e => setPageName(e.target.value)} placeholder="Ex: Minha Empresa" className="flex-1 h-9 text-sm" />
+                  <Button onClick={handleCreate} disabled={createWebhook.isPending} size="sm" className="gap-1 shrink-0">
+                    {createWebhook.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
+                    Criar Webhook
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Step 2 */}
+          <div className={`flex gap-3 p-3 rounded-lg transition-colors ${currentStep === 1 ? 'bg-blue-100/50 dark:bg-blue-900/20 ring-1 ring-blue-300' : 'bg-background/50'}`}>
+            <span className="flex items-center justify-center w-7 h-7 rounded-full bg-muted text-muted-foreground text-xs font-bold shrink-0">2</span>
+            <div>
+              <p className="font-medium">Acesse o Facebook Business Manager</p>
+              <p className="text-muted-foreground text-xs mt-1">
+                Vá em{' '}
+                <a href="https://business.facebook.com/settings/" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline hover:text-blue-800">
+                  business.facebook.com/settings
+                </a>
+                {' '}→ Selecione sua conta → No menu lateral, clique em <strong>"Webhooks"</strong>
+              </p>
+            </div>
+          </div>
+
+          {/* Step 3 */}
+          <div className={`flex gap-3 p-3 rounded-lg transition-colors ${currentStep === 2 ? 'bg-blue-100/50 dark:bg-blue-900/20 ring-1 ring-blue-300' : 'bg-background/50'}`}>
+            <span className="flex items-center justify-center w-7 h-7 rounded-full bg-muted text-muted-foreground text-xs font-bold shrink-0">3</span>
+            <div>
+              <p className="font-medium">Configure o Webhook no Facebook</p>
+              <p className="text-muted-foreground text-xs mt-1">
+                Clique em <strong>"Adicionar assinatura"</strong> ou <strong>"Editar"</strong>. Cole a <strong>URL de Callback</strong> e o <strong>Token de Verificação</strong> que aparecem abaixo nos campos correspondentes.
+              </p>
+            </div>
+          </div>
+
+          {/* Step 4 */}
+          <div className={`flex gap-3 p-3 rounded-lg transition-colors ${currentStep === 3 ? 'bg-blue-100/50 dark:bg-blue-900/20 ring-1 ring-blue-300' : 'bg-background/50'}`}>
+            <span className="flex items-center justify-center w-7 h-7 rounded-full bg-muted text-muted-foreground text-xs font-bold shrink-0">4</span>
+            <div>
+              <p className="font-medium">Inscreva-se no campo "leadgen"</p>
+              <p className="text-muted-foreground text-xs mt-1">
+                Após verificar o webhook, marque a caixa <strong>"leadgen"</strong> na lista de campos. Isso ativa o envio automático de leads para seu CRM.
+              </p>
+            </div>
+          </div>
+
+          {/* Step 5 */}
+          <div className="flex gap-3 p-3 rounded-lg bg-background/50">
+            <span className="flex items-center justify-center w-7 h-7 rounded-full bg-muted text-muted-foreground text-xs font-bold shrink-0">5</span>
+            <div>
+              <p className="font-medium">Pronto! 🎉</p>
+              <p className="text-muted-foreground text-xs mt-1">
+                Novos leads do Facebook aparecerão automaticamente na aba <strong>Leads</strong> com a origem "Facebook".
+              </p>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
-      <div className="flex gap-2">
-        <Input value={pageName} onChange={e => setPageName(e.target.value)} placeholder="Nome da página (ex: Minha Empresa)" className="flex-1" />
-        <Button onClick={handleCreate} disabled={createWebhook.isPending} className="gap-1">
-          <Plus className="h-4 w-4" /> Criar Webhook
-        </Button>
-      </div>
+      {/* Add new webhook if already has some */}
+      {hasWebhooks && (
+        <div className="flex gap-2">
+          <Input value={pageName} onChange={e => setPageName(e.target.value)} placeholder="Nome da página (ex: Minha Empresa)" className="flex-1" />
+          <Button onClick={handleCreate} disabled={createWebhook.isPending} className="gap-1 shrink-0">
+            {createWebhook.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+            Adicionar Página
+          </Button>
+        </div>
+      )}
 
+      {/* Webhook cards */}
       {(webhooks || []).map((wh) => (
-        <Card key={wh.id}>
-          <CardContent className="p-4 space-y-3">
+        <Card key={wh.id} className="border-green-200 dark:border-green-900">
+          <CardContent className="p-4 space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Facebook className="h-5 w-5 text-primary" />
-                <span className="font-medium text-sm">{wh.page_name || 'Página sem nome'}</span>
+                <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/30">
+                  <Facebook className="h-4 w-4 text-blue-600" />
+                </div>
+                <div>
+                  <span className="font-medium text-sm">{wh.page_name || 'Página sem nome'}</span>
+                  <p className="text-xs text-muted-foreground">Webhook configurado</p>
+                </div>
                 <Badge variant={wh.active ? 'default' : 'secondary'} className="text-xs">
-                  {wh.active ? 'Ativo' : 'Inativo'}
+                  {wh.active ? <><CheckCircle2 className="h-3 w-3 mr-1" />Ativo</> : <><XCircle className="h-3 w-3 mr-1" />Inativo</>}
                 </Badge>
               </div>
               <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => { if (confirm('Remover webhook?')) deleteWebhook.mutate(wh.id); }}>
                 <Trash2 className="h-4 w-4" />
               </Button>
             </div>
-            <div className="space-y-2">
-              <div>
-                <Label className="text-xs text-muted-foreground">URL de Callback</Label>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                  📋 URL de Callback
+                  <span className="text-[10px] text-blue-600">(cole no Facebook)</span>
+                </Label>
                 <div className="flex gap-1">
-                  <Input value={webhookBaseUrl} readOnly className="text-xs font-mono" />
-                  <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => copyToClipboard(webhookBaseUrl)}>
+                  <Input value={webhookBaseUrl} readOnly className="text-xs font-mono bg-muted/50" />
+                  <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => copyToClipboard(webhookBaseUrl, 'URL de Callback')}>
                     <Copy className="h-3 w-3" />
                   </Button>
                 </div>
               </div>
-              <div>
-                <Label className="text-xs text-muted-foreground">Token de Verificação</Label>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                  🔑 Token de Verificação
+                  <span className="text-[10px] text-blue-600">(cole no Facebook)</span>
+                </Label>
                 <div className="flex gap-1">
-                  <Input value={wh.verify_token} readOnly className="text-xs font-mono" />
-                  <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => copyToClipboard(wh.verify_token)}>
+                  <Input value={wh.verify_token} readOnly className="text-xs font-mono bg-muted/50" />
+                  <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => copyToClipboard(wh.verify_token, 'Token de Verificação')}>
                     <Copy className="h-3 w-3" />
                   </Button>
                 </div>
@@ -251,6 +344,17 @@ function FacebookSection() {
           </CardContent>
         </Card>
       ))}
+
+      {/* Empty state */}
+      {!hasWebhooks && (
+        <Card className="border-dashed">
+          <CardContent className="flex flex-col items-center py-8 text-center">
+            <Facebook className="h-10 w-10 text-muted-foreground mb-3" />
+            <p className="text-muted-foreground text-sm">Nenhum webhook criado ainda</p>
+            <p className="text-muted-foreground text-xs mt-1">Crie um webhook acima para começar a receber leads do Facebook</p>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
