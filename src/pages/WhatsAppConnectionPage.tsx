@@ -304,9 +304,17 @@ function InstanceCard({ instance, profiles, onRefresh }: {
               </div>
             </div>
           </div>
-          <Button variant="ghost" size="icon" onClick={handleDelete} disabled={deleting} className="text-muted-foreground hover:text-destructive h-8 w-8">
-            {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-          </Button>
+          <div className="flex items-center gap-1.5">
+            {isConnected && (
+              <Button variant="outline" size="sm" onClick={handleSyncMessages} disabled={syncing} className="gap-1.5 h-8 text-xs">
+                {syncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                Importar Mensagens
+              </Button>
+            )}
+            <Button variant="ghost" size="icon" onClick={handleDelete} disabled={deleting} className="text-muted-foreground hover:text-destructive h-8 w-8">
+              {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+            </Button>
+          </div>
         </div>
 
         {/* Connection area (only when disconnected) */}
