@@ -29,8 +29,39 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
+function formatPhoneDisplay(phone: string) {
+  if (!phone) return '';
+  // Remove non-digits
+  const digits = phone.replace(/\D/g, '');
+  // If it doesn't look like a phone number (too long or no country code pattern), return empty
+  if (digits.length > 15 || digits.length < 8) return '';
+  // Format as +XX (XX) XXXXX-XXXX for BR numbers
+  if (digits.startsWith('55') && digits.length >= 12) {
+    const ddd = digits.slice(2, 4);
+    const num = digits.slice(4);
+    return `+55 (${ddd}) ${num.slice(0, -4)}-${num.slice(-4)}`;
+  }
+  return `+${digits}`;
+}
+
+function getDisplayName(chat: any) {
+  const name = chat.contact_name;
+  const phone = chat.contact_phone || '';
+  // If name exists and is NOT just digits (i.e. not a raw ID), use it
+  if (name && !/^\d{10,}$/.test(name)) return name;
+  // Try to format phone
+  const formatted = formatPhoneDisplay(phone);
+  if (formatted) return formatted;
+  // Fallback
+  return phone || 'Desconhecido';
+}
+
 function initials(name: string) {
-  return name?.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase() || '?';
+  if (!name) return '?';
+  // If it starts with + (phone number), use last 2 digits
+  if (name.startsWith('+')) return name.slice(-2);
+  return name.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase() || '?';
+
 }
 
 function formatTime(date: string) {
@@ -204,7 +235,8 @@ function ChatList({
 }) {
   const filtered = chats.filter(
     (c) =>
-      (c.contact_name || c.contact_phone || '').toLowerCase().includes(search.toLowerCase())
+      (c.contact_name || c.contact_phone || '').toLowerCase().includes(search.toLowerCase()) ||
+      getDisplayName(c).toLowerCase().includes(search.toLowerCase())
   );
 
   return (
@@ -239,13 +271,13 @@ function ChatList({
             >
               <Avatar className="h-11 w-11 shrink-0">
                 <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">
-                  {initials(chat.contact_name || chat.contact_phone || '')}
+                  {initials(getDisplayName(chat))}
                 </AvatarFallback>
               </Avatar>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between">
                   <p className="font-semibold text-sm text-foreground truncate">
-                    {chat.contact_name || chat.contact_phone || 'Desconhecido'}
+                    {getDisplayName(chat)}
                   </p>
                   <span className="text-[10px] text-muted-foreground shrink-0">
                     {chat.last_message_at ? formatTime(chat.last_message_at) : ''}
@@ -402,7 +434,7 @@ function MessageArea({
     }
   };
 
-  const contactName = chat?.contact_name || chat?.contact_phone || 'Desconhecido';
+  const contactName = getDisplayName(chat);
   const contactPhone = chat?.contact_phone || '';
 
   return (
