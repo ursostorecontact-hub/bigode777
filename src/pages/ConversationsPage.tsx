@@ -574,7 +574,6 @@ export default function ConversationsPage() {
     </div>
   );
 }
-  const { data: chats, isLoading } = useWhatsAppChats();
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
 
