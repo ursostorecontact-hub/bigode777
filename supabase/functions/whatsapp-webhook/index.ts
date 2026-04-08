@@ -75,7 +75,7 @@ Deno.serve(async (req) => {
       } else if (message.imageMessage) {
         messageType = "image";
         content = message.imageMessage.caption || "📷 Imagem";
-        mediaUrl = message.imageMessage.url || null;
+        mediaUrl = message.imageMessage.url || data.mediaUrl || null;
       } else if (message.audioMessage) {
         messageType = "audio";
         content = "🎵 Áudio";
@@ -83,12 +83,15 @@ Deno.serve(async (req) => {
       } else if (message.videoMessage) {
         messageType = "video";
         content = message.videoMessage.caption || "🎥 Vídeo";
+        mediaUrl = message.videoMessage.url || data.mediaUrl || null;
       } else if (message.documentMessage) {
         messageType = "document";
         content = message.documentMessage.fileName || "📄 Documento";
+        mediaUrl = message.documentMessage.url || data.mediaUrl || null;
       } else if (message.stickerMessage) {
         messageType = "sticker";
         content = "🎨 Sticker";
+        mediaUrl = message.stickerMessage.url || data.mediaUrl || null;
       } else {
         content = "Mensagem não suportada";
       }
