@@ -167,19 +167,6 @@ Deno.serve(async (req) => {
       if (!phone) throw new Error("Número de telefone obrigatório");
       
       const cleanPhone = phone.replace(/\D/g, "");
-      
-      // Ensure instance exists
-      try {
-        await fetch(`${EVOLUTION_URL}/instance/create`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", apikey: EVOLUTION_API_KEY },
-          body: JSON.stringify({
-            instanceName: INSTANCE_NAME,
-            integration: "WHATSAPP-BAILEYS",
-            qrcode: false,
-          }),
-        });
-      } catch (_) { /* instance may already exist */ }
 
       // Request pairing code
       const pairRes = await fetch(
