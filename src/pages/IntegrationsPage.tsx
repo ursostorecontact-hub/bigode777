@@ -136,14 +136,6 @@ function WhatsAppSection() {
               <Input value={name} onChange={e => setName(e.target.value)} placeholder="Ex: WhatsApp Comercial" />
             </div>
             <div className="space-y-1">
-              <Label>URL da Evolution API *</Label>
-              <Input value={evolutionUrl} onChange={e => setEvolutionUrl(e.target.value)} placeholder="https://sua-evolution.com" />
-            </div>
-            <div className="space-y-1">
-              <Label>API Key *</Label>
-              <Input value={evolutionApiKey} onChange={e => setEvolutionApiKey(e.target.value)} placeholder="Sua chave de API" />
-            </div>
-            <div className="space-y-1">
               <Label>Nome da Instância *</Label>
               <Input value={instanceName} onChange={e => setInstanceName(e.target.value)} placeholder="meu-whatsapp-01" />
             </div>
