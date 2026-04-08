@@ -45,11 +45,15 @@ Deno.serve(async (req) => {
     }
 
     if (event === "messages.upsert") {
-      const msg = data.message || data;
+      // Evolution API v2 can send data in different formats
+      // Sometimes data is the message directly, sometimes it's wrapped
+      const msg = data;
       const key = msg.key || {};
-      const remoteJid = key.remoteJid || "";
-      const fromMe = key.fromMe || false;
-      const messageId = key.id || "";
+      const remoteJid = key.remoteJid || msg.remoteJid || "";
+      const fromMe = key.fromMe ?? false;
+      const messageId = key.id || msg.id || "";
+
+      console.log("Processing message:", JSON.stringify({ remoteJid, fromMe, messageId }).slice(0, 200));
 
       // Skip status broadcasts and groups
       if (remoteJid === "status@broadcast" || remoteJid.includes("@g.us")) {
