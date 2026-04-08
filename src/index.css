@@ -113,7 +113,15 @@
 
 @layer utilities {
   .gradient-primary {
-    background: linear-gradient(135deg, hsl(221, 83%, 53%), hsl(250, 83%, 60%));
+    background: linear-gradient(135deg, hsl(221, 83%, 53%), hsl(262, 83%, 58%));
+  }
+  
+  .gradient-hero {
+    background: linear-gradient(135deg, hsl(221, 83%, 15%), hsl(262, 60%, 20%), hsl(221, 83%, 12%));
+  }
+
+  .gradient-cta {
+    background: linear-gradient(135deg, hsl(221, 83%, 53%), hsl(262, 83%, 58%), hsl(330, 80%, 55%));
   }
   
   .gradient-success {
@@ -122,5 +130,34 @@
 
   .glass-card {
     @apply bg-card/80 backdrop-blur-sm border border-border/50;
+  }
+
+  .glass-card-dark {
+    background: hsla(222, 47%, 15%, 0.6);
+    backdrop-filter: blur(12px);
+    border: 1px solid hsla(221, 83%, 53%, 0.15);
+  }
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-10px); }
+  }
+
+  @keyframes shimmer {
+    0% { background-position: -200% center; }
+    100% { background-position: 200% center; }
+  }
+
+  @keyframes glow-pulse {
+    0%, 100% { box-shadow: 0 0 20px hsla(221, 83%, 53%, 0.3); }
+    50% { box-shadow: 0 0 40px hsla(221, 83%, 53%, 0.6), 0 0 60px hsla(262, 83%, 58%, 0.2); }
+  }
+
+  .animate-float {
+    animation: float 6s ease-in-out infinite;
+  }
+
+  .animate-glow-pulse {
+    animation: glow-pulse 3s ease-in-out infinite;
   }
 }
