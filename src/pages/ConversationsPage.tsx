@@ -393,6 +393,15 @@ function MessageArea({
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
+  const handleDeleteMessage = async (msgId: string) => {
+    try {
+      await deleteMessage.mutateAsync({ messageId: msgId, chatId });
+      toast({ title: 'Mensagem apagada' });
+    } catch (err: any) {
+      toast({ title: 'Erro ao apagar', description: err.message, variant: 'destructive' });
+    }
+  };
+
   const contactName = chat?.contact_name || chat?.contact_phone || 'Desconhecido';
   const contactPhone = chat?.contact_phone || '';
 
