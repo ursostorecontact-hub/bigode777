@@ -1,6 +1,7 @@
 import React from 'react';
 import { NavLink } from '@/components/NavLink';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTenant } from '@/contexts/TenantContext';
 import { useLocation } from 'react-router-dom';
 import {
   Sidebar,
@@ -30,12 +31,13 @@ import {
   Plug,
   MessageSquare,
   Smartphone,
+  ShieldCheck,
 } from 'lucide-react';
 import flashLogo from '@/assets/flash-logo.png';
 import { Button } from '@/components/ui/button';
 
 const mainNav = [
-  { title: 'Dashboard', url: '/', icon: LayoutDashboard },
+  { title: 'Dashboard', url: '/dashboard', icon: LayoutDashboard },
   { title: 'Leads', url: '/leads', icon: Users },
   { title: 'Pipeline', url: '/pipeline', icon: Kanban },
   { title: 'Conversas', url: '/conversas', icon: MessageSquare },
@@ -57,6 +59,7 @@ export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === 'collapsed';
   const { profile, role, signOut } = useAuth();
+  const { isSuperAdmin } = useTenant();
   const location = useLocation();
 
   const isActive = (path: string) => location.pathname === path;
@@ -115,6 +118,16 @@ export function AppSidebar() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
+              {isSuperAdmin && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={isActive('/superadmin')}>
+                    <NavLink to="/superadmin" end className="hover:bg-sidebar-accent/50" activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-medium">
+                      <ShieldCheck className="h-4 w-4" />
+                      {!collapsed && <span>Super Admin</span>}
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
