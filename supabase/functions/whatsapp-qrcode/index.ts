@@ -224,32 +224,48 @@ Deno.serve(async (req) => {
 
       const cleanPhone = phone.replace(/\D/g, "");
 
-      // Ensure instance exists
-      const checkRes = await fetch(
-        `${inst.evolution_url}/instance/connectionState/${inst.instance_name}`,
-        { headers: { apikey: inst.evolution_api_key } }
-      );
-      if (!checkRes.ok) {
-        await fetch(`${inst.evolution_url}/instance/create`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", apikey: inst.evolution_api_key },
-          body: JSON.stringify({
-            instanceName: inst.instance_name,
-            integration: "WHATSAPP-BAILEYS",
-            qrcode: false,
-          }),
+      // Delete existing instance and recreate with qrcode:false for pairing code support
+      try {
+        await fetch(`${inst.evolution_url}/instance/logout/${inst.instance_name}`, {
+          method: "DELETE",
+          headers: { apikey: inst.evolution_api_key },
         });
+      } catch (_) { /* ignore */ }
+      try {
+        await fetch(`${inst.evolution_url}/instance/delete/${inst.instance_name}`, {
+          method: "DELETE",
+          headers: { apikey: inst.evolution_api_key },
+        });
+      } catch (_) { /* ignore */ }
+
+      // Recreate instance with qrcode:false (required for pairing codes)
+      const createRes = await fetch(`${inst.evolution_url}/instance/create`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", apikey: inst.evolution_api_key },
+        body: JSON.stringify({
+          instanceName: inst.instance_name,
+          integration: "WHATSAPP-BAILEYS",
+          qrcode: false,
+        }),
+      });
+      if (!createRes.ok && createRes.status !== 409) {
+        const errText = await createRes.text();
+        if (!errText.includes("already in use")) {
+          throw new Error(`Evolution API create: ${errText}`);
+        }
       } else {
-        await checkRes.text();
+        await createRes.text();
       }
 
-      // Request pairing code with phone number via POST
+      // Wait briefly for instance to initialize
+      await new Promise(r => setTimeout(r, 1000));
+
+      // Request pairing code with phone number as query param
       const pairRes = await fetch(
-        `${inst.evolution_url}/instance/connect/${inst.instance_name}`,
+        `${inst.evolution_url}/instance/connect/${inst.instance_name}?number=${cleanPhone}`,
         {
-          method: "POST",
-          headers: { "Content-Type": "application/json", apikey: inst.evolution_api_key },
-          body: JSON.stringify({ number: cleanPhone }),
+          method: "GET",
+          headers: { apikey: inst.evolution_api_key },
         }
       );
 
