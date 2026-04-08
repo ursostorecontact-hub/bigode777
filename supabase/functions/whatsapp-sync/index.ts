@@ -74,18 +74,44 @@ Deno.serve(async (req) => {
 
     console.log(`Syncing chats for instance: ${instance.instance_name}`);
 
-    // 1. Fetch all chats from Evolution API
-    const chatsRes = await fetch(
+    // 1. Fetch all chats from Evolution API (try POST first, then GET)
+    let chats: any[] = [];
+    
+    // Try POST /chat/findChats
+    let chatsRes = await fetch(
       `${instance.evolution_url}/chat/findChats/${instance.instance_name}`,
-      { headers: { apikey: instance.evolution_api_key } }
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: instance.evolution_api_key,
+        },
+        body: JSON.stringify({}),
+      }
     );
-    const chats = await chatsRes.json();
+    let chatsData = await chatsRes.json();
+    console.log("findChats POST response:", JSON.stringify(chatsData).slice(0, 500));
 
-    if (!Array.isArray(chats)) {
-      console.log("No chats array returned:", JSON.stringify(chats).slice(0, 300));
-      return new Response(JSON.stringify({ ok: true, synced: 0, message: "No chats found" }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    if (Array.isArray(chatsData)) {
+      chats = chatsData;
+    } else if (chatsData?.chats && Array.isArray(chatsData.chats)) {
+      chats = chatsData.chats;
+    } else {
+      // Try GET /chat/findContacts as fallback
+      chatsRes = await fetch(
+        `${instance.evolution_url}/chat/findContacts/${instance.instance_name}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: instance.evolution_api_key,
+          },
+          body: JSON.stringify({}),
+        }
+      );
+      chatsData = await chatsRes.json();
+      console.log("findContacts response:", JSON.stringify(chatsData).slice(0, 500));
+      if (Array.isArray(chatsData)) chats = chatsData;
     }
 
     console.log(`Found ${chats.length} chats to sync`);
