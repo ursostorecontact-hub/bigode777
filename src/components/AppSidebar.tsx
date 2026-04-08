@@ -31,6 +31,7 @@ import {
   MessageSquare,
   Smartphone,
 } from 'lucide-react';
+import flashLogo from '@/assets/flash-logo.png';
 import { Button } from '@/components/ui/button';
 
 const mainNav = [
@@ -75,15 +76,13 @@ export function AppSidebar() {
           <SidebarGroupLabel className="px-4 mb-2">
             {!collapsed && (
               <div className="flex items-center gap-2">
-                <div className="h-8 w-8 rounded-lg gradient-primary flex items-center justify-center">
-                  <BarChart3 className="h-4 w-4 text-primary-foreground" />
-                </div>
-                <span className="font-bold text-sidebar-accent-foreground text-base"><span className="font-bold text-sidebar-accent-foreground text-base">Flash CRMs</span></span>
+                <img src={flashLogo} alt="Flash CRMs" width={32} height={32} />
+                <span className="font-bold text-sidebar-accent-foreground text-base">Flash CRMs</span>
               </div>
             )}
             {collapsed && (
-              <div className="h-8 w-8 rounded-lg gradient-primary flex items-center justify-center mx-auto">
-                <BarChart3 className="h-4 w-4 text-primary-foreground" />
+              <div className="mx-auto">
+                <img src={flashLogo} alt="Flash CRMs" width={32} height={32} />
               </div>
             )}
           </SidebarGroupLabel>
