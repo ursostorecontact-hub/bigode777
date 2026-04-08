@@ -25,6 +25,10 @@ import ConversationsPage from "@/pages/ConversationsPage";
 import SuperAdminPage from "@/pages/SuperAdminPage";
 import FacebookAudiencesPage from "@/pages/FacebookAudiencesPage";
 import NotFound from "@/pages/NotFound";
+import TermsPage from "@/pages/TermsPage";
+import PrivacyPage from "@/pages/PrivacyPage";
+import AboutPage from "@/pages/AboutPage";
+import ContactPage from "@/pages/ContactPage";
 
 const queryClient = new QueryClient();
 
@@ -63,6 +67,10 @@ function AppRoutes() {
       <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <LandingPage />} />
       <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <LoginPage />} />
       <Route path="/registro" element={user ? <Navigate to="/dashboard" replace /> : <RegisterPage />} />
+      <Route path="/termos" element={<TermsPage />} />
+      <Route path="/privacidade" element={<PrivacyPage />} />
+      <Route path="/sobre" element={<AboutPage />} />
+      <Route path="/contato" element={<ContactPage />} />
       
       {/* Protected routes */}
       <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
