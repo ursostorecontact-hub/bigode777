@@ -114,6 +114,12 @@ Deno.serve(async (req) => {
       if (Array.isArray(chatsData)) chats = chatsData;
     }
 
+    if (chats.length === 0) {
+      return new Response(JSON.stringify({ ok: true, synced_chats: 0, synced_messages: 0, message: "No chats found from API" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     console.log(`Found ${chats.length} chats to sync`);
 
     let syncedChats = 0;
