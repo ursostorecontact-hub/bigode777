@@ -321,23 +321,28 @@ function MessageArea({
     if (audio.recording) {
       try {
         const blob = await audio.stop();
-        // Send audio as base64 via the send edge function
+        setSending(true);
         const reader = new FileReader();
         reader.onloadend = async () => {
           const base64 = (reader.result as string).split(',')[1];
           try {
             await sendMessage.mutateAsync({
               chatId,
-              content: '🎤 Áudio',
+              content: '🎵 Áudio',
+              messageType: 'audio',
+              mediaBase64: base64,
+              mediaMimetype: 'audio/ogg',
             });
-            toast({ title: 'Áudio enviado' });
           } catch (err: any) {
             toast({ title: 'Erro ao enviar áudio', description: err.message, variant: 'destructive' });
+          } finally {
+            setSending(false);
           }
         };
         reader.readAsDataURL(blob);
       } catch (err: any) {
         toast({ title: 'Erro', description: err.message, variant: 'destructive' });
+        setSending(false);
       }
     } else {
       try {
@@ -346,6 +351,42 @@ function MessageArea({
         toast({ title: 'Microfone', description: err.message, variant: 'destructive' });
       }
     }
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    setSending(true);
+    try {
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64 = (reader.result as string).split(',')[1];
+        let messageType = 'document';
+        if (file.type.startsWith('image/')) messageType = 'image';
+        else if (file.type.startsWith('video/')) messageType = 'video';
+
+        try {
+          await sendMessage.mutateAsync({
+            chatId,
+            content: '',
+            messageType,
+            mediaBase64: base64,
+            mediaMimetype: file.type,
+            mediaFilename: file.name,
+          });
+        } catch (err: any) {
+          toast({ title: 'Erro ao enviar', description: err.message, variant: 'destructive' });
+        } finally {
+          setSending(false);
+        }
+      };
+      reader.readAsDataURL(file);
+    } catch {
+      setSending(false);
+    }
+    // Reset input
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const contactName = chat?.contact_name || chat?.contact_phone || 'Desconhecido';
