@@ -62,47 +62,39 @@ export default function RegisterPage() {
       if (signUpError) throw signUpError;
       if (!signUpData.user) throw new Error('Erro ao criar conta');
 
-      // 2. Create tenant
-      const { data: tenant, error: tenantError } = await supabase
-        .from('tenants')
-        .insert({
-          name: companyName,
-          slug,
-          plan: selectedPlan as 'basico' | 'pro' | 'enterprise',
-          owner_id: signUpData.user.id,
-          email,
-        })
-        .select()
-        .single();
+      // 2. Sign in immediately to get a valid session
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-      if (tenantError) throw tenantError;
-
-      // 3. Create tenant membership
-      const { error: memberError } = await supabase
-        .from('tenant_members')
-        .insert({
-          tenant_id: tenant.id,
-          user_id: signUpData.user.id,
-          role: 'owner' as const,
+      if (signInError) {
+        // If auto-confirm is off, user needs to confirm email first
+        toast({
+          title: 'Conta criada com sucesso!',
+          description: 'Verifique seu email para confirmar o cadastro e depois faça login.',
         });
+        navigate('/login');
+        return;
+      }
 
-      if (memberError) throw memberError;
+      // 3. Create tenant via edge function (uses service role to bypass RLS)
+      const { data: result, error: fnError } = await supabase.functions.invoke('register-tenant', {
+        body: { companyName, slug, plan: selectedPlan },
+      });
 
-      // 4. Update profile with tenant_id
-      await supabase
-        .from('profiles')
-        .update({ tenant_id: tenant.id })
-        .eq('id', signUpData.user.id);
+      if (fnError) throw new Error(fnError.message || 'Erro ao criar empresa');
+      if (result?.error) throw new Error(result.error);
 
       toast({
         title: 'Conta criada com sucesso!',
-        description: 'Verifique seu email para confirmar o cadastro.',
+        description: 'Bem-vindo ao Flash CRMs!',
       });
 
-      navigate('/login');
+      navigate('/dashboard');
     } catch (err: any) {
       console.error(err);
-      const msg = err.message?.includes('unique') 
+      const msg = err.message?.includes('slug') 
         ? 'Este slug de empresa já está em uso' 
         : err.message || 'Erro ao registrar';
       toast({ title: msg, variant: 'destructive' });
