@@ -16,14 +16,16 @@ import { Label } from '@/components/ui/label';
 import {
   MessageSquare, Send, Loader2, Search, Phone, ArrowLeft,
   Check, CheckCheck, Clock, Mic, MicOff, UserPlus, Paperclip,
-  Image as ImageIcon, Video, FileText, X,
+  Image as ImageIcon, Video, FileText, X, Trash2,
 } from 'lucide-react';
 import {
   useWhatsAppChats,
   useWhatsAppMessages,
   useSendWhatsAppMessage,
   useMarkChatRead,
+  useDeleteWhatsAppMessage,
 } from '@/hooks/use-whatsapp-chat';
+import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -281,7 +283,9 @@ function MessageArea({
   const { data: messages, isLoading } = useWhatsAppMessages(chatId);
   const sendMessage = useSendWhatsAppMessage();
   const markRead = useMarkChatRead();
+  const deleteMessage = useDeleteWhatsAppMessage();
   const { toast } = useToast();
+  const { role } = useAuth();
   const [text, setText] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -389,6 +393,15 @@ function MessageArea({
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
+  const handleDeleteMessage = async (msgId: string) => {
+    try {
+      await deleteMessage.mutateAsync({ messageId: msgId, chatId });
+      toast({ title: 'Mensagem apagada' });
+    } catch (err: any) {
+      toast({ title: 'Erro ao apagar', description: err.message, variant: 'destructive' });
+    }
+  };
+
   const contactName = chat?.contact_name || chat?.contact_phone || 'Desconhecido';
   const contactPhone = chat?.contact_phone || '';
 
@@ -464,80 +477,94 @@ function MessageArea({
                     </div>
                   )}
                   <div className={`flex ${msg.from_me ? 'justify-end' : 'justify-start'}`}>
-                    <div
-                      className={`max-w-[75%] rounded-2xl px-3 py-2 text-sm ${
-                        msg.from_me
-                          ? 'bg-primary text-primary-foreground rounded-br-md'
-                          : 'bg-muted text-foreground rounded-bl-md'
-                      }`}
-                    >
-                      {msg.message_type === 'audio' && msg.media_url ? (
-                        <div className="flex items-center gap-2 min-w-[200px]">
-                          <Mic className="h-4 w-4 shrink-0 opacity-70" />
-                          <audio controls preload="none" className="h-8 max-w-[220px]" src={msg.media_url}>
-                            Seu navegador não suporta áudio.
-                          </audio>
-                        </div>
-                      ) : msg.message_type === 'audio' ? (
-                        <div className="flex items-center gap-2">
-                          <Mic className="h-4 w-4 shrink-0 opacity-70" />
-                          <span className="text-sm">🎤 Áudio</span>
-                        </div>
-                      ) : msg.message_type === 'image' && msg.media_url ? (
-                        <div>
-                          <a href={msg.media_url} target="_blank" rel="noopener noreferrer">
-                            <img
+                    <div className="group relative">
+                      <div
+                        className={`max-w-[75%] rounded-2xl px-3 py-2 text-sm ${
+                          msg.from_me
+                            ? 'bg-primary text-primary-foreground rounded-br-md'
+                            : 'bg-muted text-foreground rounded-bl-md'
+                        } ${(msg as any).deleted_at ? 'opacity-60 italic' : ''}`}
+                      >
+                        {(msg as any).deleted_at ? (
+                          <p className="text-xs">🚫 Mensagem apagada</p>
+                        ) : msg.message_type === 'audio' && msg.media_url ? (
+                          <div className="flex items-center gap-2 min-w-[200px]">
+                            <Mic className="h-4 w-4 shrink-0 opacity-70" />
+                            <audio controls preload="none" className="h-8 max-w-[220px]" src={msg.media_url}>
+                              Seu navegador não suporta áudio.
+                            </audio>
+                          </div>
+                        ) : msg.message_type === 'audio' ? (
+                          <div className="flex items-center gap-2">
+                            <Mic className="h-4 w-4 shrink-0 opacity-70" />
+                            <span className="text-sm">🎤 Áudio</span>
+                          </div>
+                        ) : msg.message_type === 'image' && msg.media_url ? (
+                          <div>
+                            <a href={msg.media_url} target="_blank" rel="noopener noreferrer">
+                              <img
+                                src={msg.media_url}
+                                alt="Imagem"
+                                className="rounded-lg max-w-[250px] max-h-[300px] object-cover cursor-pointer"
+                                loading="lazy"
+                              />
+                            </a>
+                            {msg.content && msg.content !== '📷 Imagem' && (
+                              <p className="whitespace-pre-wrap break-words mt-1">{msg.content}</p>
+                            )}
+                          </div>
+                        ) : msg.message_type === 'video' && msg.media_url ? (
+                          <div>
+                            <video
+                              controls
+                              preload="none"
+                              className="rounded-lg max-w-[250px] max-h-[300px]"
                               src={msg.media_url}
-                              alt="Imagem"
-                              className="rounded-lg max-w-[250px] max-h-[300px] object-cover cursor-pointer"
-                              loading="lazy"
                             />
+                            {msg.content && msg.content !== '🎥 Vídeo' && (
+                              <p className="whitespace-pre-wrap break-words mt-1">{msg.content}</p>
+                            )}
+                          </div>
+                        ) : msg.message_type === 'document' && msg.media_url ? (
+                          <a
+                            href={msg.media_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-2 underline"
+                          >
+                            <FileText className="h-4 w-4 shrink-0" />
+                            <span className="text-sm">{msg.content || '📄 Documento'}</span>
                           </a>
-                          {msg.content && msg.content !== '📷 Imagem' && (
-                            <p className="whitespace-pre-wrap break-words mt-1">{msg.content}</p>
-                          )}
+                        ) : (
+                          <>
+                            {msg.message_type !== 'text' && (
+                              <p className="text-xs opacity-70 mb-0.5">
+                                {msg.message_type === 'image' ? '📷 Imagem' : msg.message_type === 'video' ? '🎥 Vídeo' : msg.message_type}
+                              </p>
+                            )}
+                            <p className="whitespace-pre-wrap break-words">{msg.content}</p>
+                          </>
+                        )}
+                        <div className={`flex items-center justify-end gap-1 mt-0.5 ${msg.from_me ? 'text-primary-foreground/60' : 'text-muted-foreground'}`}>
+                          <span className="text-[10px]">
+                            {new Date(msg.created_at).toLocaleTimeString('pt-BR', {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </span>
+                          {msg.from_me && <StatusIcon status={msg.status} />}
                         </div>
-                      ) : msg.message_type === 'video' && msg.media_url ? (
-                        <div>
-                          <video
-                            controls
-                            preload="none"
-                            className="rounded-lg max-w-[250px] max-h-[300px]"
-                            src={msg.media_url}
-                          />
-                          {msg.content && msg.content !== '🎥 Vídeo' && (
-                            <p className="whitespace-pre-wrap break-words mt-1">{msg.content}</p>
-                          )}
-                        </div>
-                      ) : msg.message_type === 'document' && msg.media_url ? (
-                        <a
-                          href={msg.media_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-2 underline"
-                        >
-                          <FileText className="h-4 w-4 shrink-0" />
-                          <span className="text-sm">{msg.content || '📄 Documento'}</span>
-                        </a>
-                      ) : (
-                        <>
-                          {msg.message_type !== 'text' && (
-                            <p className="text-xs opacity-70 mb-0.5">
-                              {msg.message_type === 'image' ? '📷 Imagem' : msg.message_type === 'video' ? '🎥 Vídeo' : msg.message_type}
-                            </p>
-                          )}
-                          <p className="whitespace-pre-wrap break-words">{msg.content}</p>
-                        </>
-                      )}
-                      <div className={`flex items-center justify-end gap-1 mt-0.5 ${msg.from_me ? 'text-primary-foreground/60' : 'text-muted-foreground'}`}>
-                        <span className="text-[10px]">
-                          {new Date(msg.created_at).toLocaleTimeString('pt-BR', {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </span>
-                        {msg.from_me && <StatusIcon status={msg.status} />}
                       </div>
+                      {/* Delete button - visible on hover */}
+                      {!(msg as any).deleted_at && (
+                        <button
+                          onClick={() => handleDeleteMessage(msg.id)}
+                          className={`absolute top-1 ${msg.from_me ? 'left-0 -translate-x-full' : 'right-0 translate-x-full'} opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-full hover:bg-destructive/10`}
+                          title="Apagar mensagem"
+                        >
+                          <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 </React.Fragment>

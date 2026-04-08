@@ -35,7 +35,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { action, chat_id, content, message_type = "text", media_base64, media_mimetype, media_filename, phone, instance_id } = await req.json();
+    const { action, chat_id, content, message_type = "text", media_base64, media_mimetype, media_filename, phone, instance_id, message_id } = await req.json();
 
     if (action === "send") {
       if (!chat_id) {
@@ -256,6 +256,87 @@ Deno.serve(async (req) => {
         .from("whatsapp_chats")
         .update({ unread_count: 0 })
         .eq("id", chat_id);
+
+      return new Response(JSON.stringify({ ok: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (action === "delete_message") {
+      if (!message_id) {
+        return new Response(JSON.stringify({ error: "message_id required" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Get message
+      const { data: msg } = await supabase
+        .from("whatsapp_messages")
+        .select("*, whatsapp_chats!inner(whatsapp_instance_id, assigned_to)")
+        .eq("id", message_id)
+        .single();
+
+      if (!msg) {
+        return new Response(JSON.stringify({ error: "Message not found" }), {
+          status: 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Check access
+      const { data: roles } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", user.id)
+        .single();
+
+      const isAdminOrManager = roles?.role === "admin" || roles?.role === "manager";
+      const isAssigned = (msg as any).whatsapp_chats?.assigned_to === user.id;
+
+      if (!isAdminOrManager && !isAssigned) {
+        return new Response(JSON.stringify({ error: "No access" }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Try to delete on WhatsApp via Evolution API if it's our message
+      if (msg.from_me && msg.evolution_message_id) {
+        const { data: instance } = await supabase
+          .from("whatsapp_instances")
+          .select("*")
+          .eq("id", (msg as any).whatsapp_chats.whatsapp_instance_id)
+          .single();
+
+        if (instance) {
+          try {
+            await fetch(
+              `${instance.evolution_url}/chat/deleteMessageForEveryone/${instance.instance_name}`,
+              {
+                method: "DELETE",
+                headers: {
+                  "Content-Type": "application/json",
+                  apikey: instance.evolution_api_key,
+                },
+                body: JSON.stringify({
+                  id: msg.evolution_message_id,
+                  remoteJid: msg.remote_jid,
+                  fromMe: true,
+                }),
+              }
+            );
+          } catch (e) {
+            console.log("Evolution delete failed (continuing):", e);
+          }
+        }
+      }
+
+      // Soft delete in DB
+      await supabase
+        .from("whatsapp_messages")
+        .update({ deleted_at: new Date().toISOString(), deleted_by: user.id })
+        .eq("id", message_id);
 
       return new Response(JSON.stringify({ ok: true }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },

@@ -493,6 +493,8 @@ export type Database = {
           chat_id: string
           content: string | null
           created_at: string
+          deleted_at: string | null
+          deleted_by: string | null
           evolution_message_id: string | null
           from_me: boolean
           id: string
@@ -505,6 +507,8 @@ export type Database = {
           chat_id: string
           content?: string | null
           created_at?: string
+          deleted_at?: string | null
+          deleted_by?: string | null
           evolution_message_id?: string | null
           from_me?: boolean
           id?: string
@@ -517,6 +521,8 @@ export type Database = {
           chat_id?: string
           content?: string | null
           created_at?: string
+          deleted_at?: string | null
+          deleted_by?: string | null
           evolution_message_id?: string | null
           from_me?: boolean
           id?: string
