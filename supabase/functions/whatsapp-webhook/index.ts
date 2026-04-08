@@ -79,6 +79,7 @@ Deno.serve(async (req) => {
       } else if (message.audioMessage) {
         messageType = "audio";
         content = "🎵 Áudio";
+        mediaUrl = message.audioMessage.url || data.mediaUrl || null;
       } else if (message.videoMessage) {
         messageType = "video";
         content = message.videoMessage.caption || "🎥 Vídeo";
