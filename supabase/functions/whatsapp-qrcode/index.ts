@@ -44,7 +44,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { action, instance_id, evolution_url, evolution_api_key, instance_name, name } = await req.json();
+    const { action, instance_id, evolution_url, evolution_api_key, instance_name, name, phone, message } = await req.json();
 
     if (action === "create") {
       // Try to create instance on Evolution API (ignore if already exists)
