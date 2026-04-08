@@ -127,10 +127,11 @@ Deno.serve(async (req) => {
 
     for (const chat of chats) {
       try {
-        const remoteJid = chat.id || chat.remoteJid || "";
+        // Evolution API v2: chat has remoteJid field, id is internal
+        const remoteJid = chat.remoteJid || chat.id || "";
 
-        // Skip groups and broadcasts
-        if (!remoteJid || remoteJid.includes("@g.us") || remoteJid === "status@broadcast") {
+        // Skip groups, broadcasts, and internal IDs without @
+        if (!remoteJid || !remoteJid.includes("@") || remoteJid.includes("@g.us") || remoteJid === "status@broadcast") {
           continue;
         }
 
