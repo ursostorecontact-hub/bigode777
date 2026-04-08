@@ -411,6 +411,53 @@ export type Database = {
           },
         ]
       }
+      whatsapp_chats: {
+        Row: {
+          assigned_to: string | null
+          contact_name: string | null
+          contact_phone: string | null
+          created_at: string
+          id: string
+          last_message: string | null
+          last_message_at: string | null
+          remote_jid: string
+          unread_count: number
+          whatsapp_instance_id: string
+        }
+        Insert: {
+          assigned_to?: string | null
+          contact_name?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          id?: string
+          last_message?: string | null
+          last_message_at?: string | null
+          remote_jid: string
+          unread_count?: number
+          whatsapp_instance_id: string
+        }
+        Update: {
+          assigned_to?: string | null
+          contact_name?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          id?: string
+          last_message?: string | null
+          last_message_at?: string | null
+          remote_jid?: string
+          unread_count?: number
+          whatsapp_instance_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_chats_whatsapp_instance_id_fkey"
+            columns: ["whatsapp_instance_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       whatsapp_instances: {
         Row: {
           created_at: string
@@ -440,6 +487,53 @@ export type Database = {
           status?: string
         }
         Relationships: []
+      }
+      whatsapp_messages: {
+        Row: {
+          chat_id: string
+          content: string | null
+          created_at: string
+          evolution_message_id: string | null
+          from_me: boolean
+          id: string
+          media_url: string | null
+          message_type: string
+          remote_jid: string
+          status: string
+        }
+        Insert: {
+          chat_id: string
+          content?: string | null
+          created_at?: string
+          evolution_message_id?: string | null
+          from_me?: boolean
+          id?: string
+          media_url?: string | null
+          message_type?: string
+          remote_jid: string
+          status?: string
+        }
+        Update: {
+          chat_id?: string
+          content?: string | null
+          created_at?: string
+          evolution_message_id?: string | null
+          from_me?: boolean
+          id?: string
+          media_url?: string | null
+          message_type?: string
+          remote_jid?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_messages_chat_id_fkey"
+            columns: ["chat_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_chats"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {

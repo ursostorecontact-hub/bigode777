@@ -18,6 +18,7 @@ import AutomationsPage from "@/pages/AutomationsPage";
 import HelpPage from "@/pages/HelpPage";
 import IntegrationsPage from "@/pages/IntegrationsPage";
 import WhatsAppConnectionPage from "@/pages/WhatsAppConnectionPage";
+import ConversationsPage from "@/pages/ConversationsPage";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -63,7 +64,8 @@ function AppRoutes() {
       <Route path="/configuracoes" element={<ProtectedRoute roles={['admin']}><SettingsPage /></ProtectedRoute>} />
       <Route path="/automacoes" element={<ProtectedRoute roles={['admin']}><AutomationsPage /></ProtectedRoute>} />
       <Route path="/integracoes" element={<ProtectedRoute roles={['admin']}><IntegrationsPage /></ProtectedRoute>} />
-      <Route path="/whatsapp" element={<ProtectedRoute><WhatsAppConnectionPage /></ProtectedRoute>} />
+      <Route path="/whatsapp" element={<ProtectedRoute roles={['admin']}><WhatsAppConnectionPage /></ProtectedRoute>} />
+      <Route path="/conversas" element={<ProtectedRoute><ConversationsPage /></ProtectedRoute>} />
       <Route path="/ajuda" element={<ProtectedRoute><HelpPage /></ProtectedRoute>} />
       <Route path="*" element={<NotFound />} />
     </Routes>
