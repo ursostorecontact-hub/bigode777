@@ -29,6 +29,7 @@ import {
   Zap,
   Plug,
   MessageSquare,
+  Smartphone,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -36,6 +37,7 @@ const mainNav = [
   { title: 'Dashboard', url: '/', icon: LayoutDashboard },
   { title: 'Leads', url: '/leads', icon: Users },
   { title: 'Pipeline', url: '/pipeline', icon: Kanban },
+  { title: 'Conversas', url: '/conversas', icon: MessageSquare },
   { title: 'Distribuição', url: '/distribuicao', icon: Share2, roles: ['admin', 'manager'] },
   { title: 'Clientes', url: '/clientes', icon: UserCheck },
   { title: 'Tarefas', url: '/tarefas', icon: CheckSquare },
@@ -45,7 +47,7 @@ const mainNav = [
 const bottomNav = [
   { title: 'Automações', url: '/automacoes', icon: Zap, roles: ['admin'] },
   { title: 'Integrações', url: '/integracoes', icon: Plug, roles: ['admin'] },
-  { title: 'WhatsApp', url: '/whatsapp', icon: MessageSquare },
+  { title: 'WhatsApp', url: '/whatsapp', icon: Smartphone, roles: ['admin'] },
   { title: 'Configurações', url: '/configuracoes', icon: Settings, roles: ['admin'] },
   { title: 'Ajuda', url: '/ajuda', icon: HelpCircle },
 ];
