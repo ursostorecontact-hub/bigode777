@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Progress } from '@/components/ui/progress';
 import {
   QrCode, Smartphone, Loader2, CheckCircle2, XCircle, RefreshCw,
-  Plus, Trash2, Users, Save, MessageSquare, Wifi, WifiOff, UserPlus,
+  Plus, Trash2, Users, Save, MessageSquare, Wifi, WifiOff, UserPlus, Phone,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import {
