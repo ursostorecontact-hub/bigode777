@@ -4,8 +4,11 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { TenantProvider, useTenant } from "@/contexts/TenantContext";
 import { AppLayout } from "@/components/AppLayout";
+import LandingPage from "@/pages/LandingPage";
 import LoginPage from "@/pages/LoginPage";
+import RegisterPage from "@/pages/RegisterPage";
 import DashboardPage from "@/pages/DashboardPage";
 import LeadsPage from "@/pages/LeadsPage";
 import PipelinePage from "@/pages/PipelinePage";
@@ -19,14 +22,16 @@ import HelpPage from "@/pages/HelpPage";
 import IntegrationsPage from "@/pages/IntegrationsPage";
 import WhatsAppConnectionPage from "@/pages/WhatsAppConnectionPage";
 import ConversationsPage from "@/pages/ConversationsPage";
+import SuperAdminPage from "@/pages/SuperAdminPage";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
 
 function ProtectedRoute({ children, roles }: { children: React.ReactNode; roles?: string[] }) {
   const { user, role, loading } = useAuth();
+  const { tenant, loading: tenantLoading } = useTenant();
   
-  if (loading) {
+  if (loading || tenantLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="h-8 w-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
@@ -35,7 +40,7 @@ function ProtectedRoute({ children, roles }: { children: React.ReactNode; roles?
   }
   
   if (!user) return <Navigate to="/login" replace />;
-  if (roles && role && !roles.includes(role)) return <Navigate to="/" replace />;
+  if (roles && role && !roles.includes(role)) return <Navigate to="/dashboard" replace />;
   
   return <AppLayout>{children}</AppLayout>;
 }
@@ -53,8 +58,13 @@ function AppRoutes() {
 
   return (
     <Routes>
-      <Route path="/login" element={user ? <Navigate to="/" replace /> : <LoginPage />} />
-      <Route path="/" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
+      {/* Public routes */}
+      <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <LandingPage />} />
+      <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <LoginPage />} />
+      <Route path="/registro" element={user ? <Navigate to="/dashboard" replace /> : <RegisterPage />} />
+      
+      {/* Protected routes */}
+      <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
       <Route path="/leads" element={<ProtectedRoute><LeadsPage /></ProtectedRoute>} />
       <Route path="/pipeline" element={<ProtectedRoute><PipelinePage /></ProtectedRoute>} />
       <Route path="/distribuicao" element={<ProtectedRoute roles={['admin', 'manager']}><DistributionPage /></ProtectedRoute>} />
@@ -67,6 +77,10 @@ function AppRoutes() {
       <Route path="/whatsapp" element={<ProtectedRoute roles={['admin']}><WhatsAppConnectionPage /></ProtectedRoute>} />
       <Route path="/conversas" element={<ProtectedRoute><ConversationsPage /></ProtectedRoute>} />
       <Route path="/ajuda" element={<ProtectedRoute><HelpPage /></ProtectedRoute>} />
+      
+      {/* Super Admin */}
+      <Route path="/superadmin" element={<ProtectedRoute><SuperAdminPage /></ProtectedRoute>} />
+      
       <Route path="*" element={<NotFound />} />
     </Routes>
   );
@@ -79,7 +93,9 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
-          <AppRoutes />
+          <TenantProvider>
+            <AppRoutes />
+          </TenantProvider>
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
