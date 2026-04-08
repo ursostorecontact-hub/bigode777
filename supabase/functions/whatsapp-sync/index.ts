@@ -184,10 +184,25 @@ Deno.serve(async (req) => {
           );
 
           const msgsData = await msgsRes.json();
-          const messages = Array.isArray(msgsData) ? msgsData : msgsData?.messages || msgsData?.data || [];
+          
+          // Log first chat's response to debug format
+          if (syncedChats <= 2) {
+            console.log(`Messages response for ${remoteJid}:`, JSON.stringify(msgsData).slice(0, 500));
+          }
 
-          if (!Array.isArray(messages)) {
-            console.log(`No messages array for ${remoteJid}`);
+          // Handle various response formats
+          let messages: any[] = [];
+          if (Array.isArray(msgsData)) {
+            messages = msgsData;
+          } else if (msgsData?.messages && Array.isArray(msgsData.messages)) {
+            messages = msgsData.messages;
+          } else if (msgsData?.data && Array.isArray(msgsData.data)) {
+            messages = msgsData.data;
+          } else if (msgsData?.records && Array.isArray(msgsData.records)) {
+            messages = msgsData.records;
+          }
+
+          if (messages.length === 0) {
             continue;
           }
 
