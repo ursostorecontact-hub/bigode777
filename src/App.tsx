@@ -23,6 +23,7 @@ import IntegrationsPage from "@/pages/IntegrationsPage";
 import WhatsAppConnectionPage from "@/pages/WhatsAppConnectionPage";
 import ConversationsPage from "@/pages/ConversationsPage";
 import SuperAdminPage from "@/pages/SuperAdminPage";
+import FacebookAudiencesPage from "@/pages/FacebookAudiencesPage";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -76,6 +77,7 @@ function AppRoutes() {
       <Route path="/integracoes" element={<ProtectedRoute roles={['admin']}><IntegrationsPage /></ProtectedRoute>} />
       <Route path="/whatsapp" element={<ProtectedRoute roles={['admin']}><WhatsAppConnectionPage /></ProtectedRoute>} />
       <Route path="/conversas" element={<ProtectedRoute><ConversationsPage /></ProtectedRoute>} />
+      <Route path="/audiencias-facebook" element={<ProtectedRoute roles={['admin']}><FacebookAudiencesPage /></ProtectedRoute>} />
       <Route path="/ajuda" element={<ProtectedRoute><HelpPage /></ProtectedRoute>} />
       
       {/* Super Admin */}

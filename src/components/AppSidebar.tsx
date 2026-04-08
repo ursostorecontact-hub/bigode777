@@ -45,6 +45,7 @@ const mainNav = [
   { title: 'Clientes', url: '/clientes', icon: UserCheck },
   { title: 'Tarefas', url: '/tarefas', icon: CheckSquare },
   { title: 'Relatórios', url: '/relatorios', icon: BarChart3 },
+  { title: 'Audiências Facebook', url: '/audiencias-facebook', icon: Target, roles: ['admin'] },
 ];
 
 const bottomNav = [
