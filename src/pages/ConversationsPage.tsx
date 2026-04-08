@@ -235,7 +235,8 @@ function ChatList({
 }) {
   const filtered = chats.filter(
     (c) =>
-      (c.contact_name || c.contact_phone || '').toLowerCase().includes(search.toLowerCase())
+      (c.contact_name || c.contact_phone || '').toLowerCase().includes(search.toLowerCase()) ||
+      getDisplayName(c).toLowerCase().includes(search.toLowerCase())
   );
 
   return (
@@ -276,7 +277,7 @@ function ChatList({
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between">
                   <p className="font-semibold text-sm text-foreground truncate">
-                    {chat.contact_name || chat.contact_phone || 'Desconhecido'}
+                    {getDisplayName(chat)}
                   </p>
                   <span className="text-[10px] text-muted-foreground shrink-0">
                     {chat.last_message_at ? formatTime(chat.last_message_at) : ''}
@@ -433,7 +434,7 @@ function MessageArea({
     }
   };
 
-  const contactName = chat?.contact_name || chat?.contact_phone || 'Desconhecido';
+  const contactName = getDisplayName(chat);
   const contactPhone = chat?.contact_phone || '';
 
   return (
