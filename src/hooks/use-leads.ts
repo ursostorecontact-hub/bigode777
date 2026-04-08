@@ -1,9 +1,14 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import type { TablesUpdate } from '@/integrations/supabase/types';
 import { useAuth } from '@/contexts/AuthContext';
 import type { LeadStatus } from '@/types/crm';
 import { useToast } from '@/hooks/use-toast';
 import { triggerAutomation } from '@/hooks/use-automations';
+
+type LeadUpdatePayload = { id: string } & TablesUpdate<'leads'>;
+type TaskUpdatePayload = { id: string } & TablesUpdate<'tasks'>;
+type SettingsUpdatePayload = { id: string } & TablesUpdate<'settings'>;
 
 export function useLeads() {
   const { user } = useAuth();
@@ -86,12 +91,13 @@ export function useUpdateLead() {
   const qc = useQueryClient();
   const { toast } = useToast();
   return useMutation({
-    mutationFn: async ({ id, ...updates }: { id: string; [key: string]: any }) => {
-      const { error } = await supabase.from('leads').update(updates).eq('id', id);
+    mutationFn: async ({ id, ...updates }: LeadUpdatePayload) => {
+      const leadUpdates: TablesUpdate<'leads'> = updates;
+      const { error } = await supabase.from('leads').update(leadUpdates).eq('id', id);
       if (error) throw error;
-      return { id, ...updates } as Record<string, any>;
+      return { id, ...leadUpdates } as LeadUpdatePayload;
     },
-    onSuccess: (data: Record<string, any>) => {
+    onSuccess: (data: LeadUpdatePayload) => {
       qc.invalidateQueries({ queryKey: ['leads'] });
       // Trigger pipeline change automation
       if (data && data.pipeline_stage) {
@@ -177,8 +183,9 @@ export function useCreateTask() {
 export function useUpdateTask() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...updates }: { id: string; [key: string]: any }) => {
-      const { error } = await supabase.from('tasks').update(updates).eq('id', id);
+    mutationFn: async ({ id, ...updates }: TaskUpdatePayload) => {
+      const taskUpdates: TablesUpdate<'tasks'> = updates;
+      const { error } = await supabase.from('tasks').update(taskUpdates).eq('id', id);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -241,8 +248,9 @@ export function useUpdateSettings() {
   const qc = useQueryClient();
   const { toast } = useToast();
   return useMutation({
-    mutationFn: async ({ id, ...updates }: { id: string; [key: string]: any }) => {
-      const { error } = await supabase.from('settings').update(updates).eq('id', id);
+    mutationFn: async ({ id, ...updates }: SettingsUpdatePayload) => {
+      const settingsUpdates: TablesUpdate<'settings'> = updates;
+      const { error } = await supabase.from('settings').update(settingsUpdates).eq('id', id);
       if (error) throw error;
     },
     onSuccess: () => {
