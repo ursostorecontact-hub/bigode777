@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Slider } from '@/components/ui/slider';
 import { Users, ArrowRight, AlertTriangle, Loader2, Shuffle, BarChart3, Percent } from 'lucide-react';
 import { useLeads, useProfiles, useUpdateLead } from '@/hooks/use-leads';
+import { useWhatsAppInstances, useWhatsAppAssignments } from '@/hooks/use-integrations';
 import { formatCurrency } from '@/types/crm';
 import { useToast } from '@/hooks/use-toast';
 
@@ -20,6 +21,8 @@ export default function DistributionPage() {
   const [mode, setMode] = useState<DistributionMode>('manual');
   const [distributing, setDistributing] = useState(false);
   const [percentages, setPercentages] = useState<Record<string, number>>({});
+  const { data: whatsappInstances } = useWhatsAppInstances();
+  const { data: whatsappAssignments } = useWhatsAppAssignments();
 
   const allLeads = leads || [];
   const allProfiles = profiles || [];
@@ -235,6 +238,24 @@ export default function DistributionPage() {
                   <p className="text-[10px] text-muted-foreground">Conversão</p>
                 </div>
               </div>
+
+              {/* WhatsApp info */}
+              {(() => {
+                const userAssignments = (whatsappAssignments || []).filter(a => a.user_id === sp.id);
+                if (userAssignments.length === 0) return null;
+                return (
+                  <div className="mt-2 pt-2 border-t border-border">
+                    {userAssignments.map(ua => {
+                      const inst = (whatsappInstances || []).find(i => i.id === ua.whatsapp_instance_id);
+                      return inst ? (
+                        <p key={ua.id} className="text-[10px] text-muted-foreground flex items-center gap-1">
+                          📱 {inst.name} ({ua.percentage}%)
+                        </p>
+                      ) : null;
+                    })}
+                  </div>
+                );
+              })()}
 
               {/* Percentage slider */}
               {mode === 'percentage' && (
