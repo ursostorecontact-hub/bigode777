@@ -284,7 +284,9 @@ function MessageArea({
   const { toast } = useToast();
   const [text, setText] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [sending, setSending] = useState(false);
   const audio = useAudioRecorder();
 
   useEffect(() => {
