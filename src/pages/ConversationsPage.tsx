@@ -427,10 +427,26 @@ function MessageArea({
                           : 'bg-muted text-foreground rounded-bl-md'
                       }`}
                     >
-                      {msg.message_type !== 'text' && (
-                        <p className="text-xs opacity-70 mb-0.5">{msg.message_type === 'audio' ? '🎤 Áudio' : msg.message_type}</p>
+                      {msg.message_type === 'audio' && msg.media_url ? (
+                        <div className="flex items-center gap-2">
+                          <Mic className="h-4 w-4 shrink-0 opacity-70" />
+                          <audio controls preload="none" className="h-8 max-w-[220px]" src={msg.media_url}>
+                            Seu navegador não suporta áudio.
+                          </audio>
+                        </div>
+                      ) : msg.message_type === 'audio' ? (
+                        <div className="flex items-center gap-2">
+                          <Mic className="h-4 w-4 shrink-0 opacity-70" />
+                          <span className="text-sm">🎤 Áudio</span>
+                        </div>
+                      ) : (
+                        <>
+                          {msg.message_type !== 'text' && (
+                            <p className="text-xs opacity-70 mb-0.5">{msg.message_type}</p>
+                          )}
+                          <p className="whitespace-pre-wrap break-words">{msg.content}</p>
+                        </>
                       )}
-                      <p className="whitespace-pre-wrap break-words">{msg.content}</p>
                       <div className={`flex items-center justify-end gap-1 mt-0.5 ${msg.from_me ? 'text-primary-foreground/60' : 'text-muted-foreground'}`}>
                         <span className="text-[10px]">
                           {new Date(msg.created_at).toLocaleTimeString('pt-BR', {
