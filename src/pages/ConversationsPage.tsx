@@ -29,8 +29,39 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
+function formatPhoneDisplay(phone: string) {
+  if (!phone) return '';
+  // Remove non-digits
+  const digits = phone.replace(/\D/g, '');
+  // If it doesn't look like a phone number (too long or no country code pattern), return empty
+  if (digits.length > 15 || digits.length < 8) return '';
+  // Format as +XX (XX) XXXXX-XXXX for BR numbers
+  if (digits.startsWith('55') && digits.length >= 12) {
+    const ddd = digits.slice(2, 4);
+    const num = digits.slice(4);
+    return `+55 (${ddd}) ${num.slice(0, -4)}-${num.slice(-4)}`;
+  }
+  return `+${digits}`;
+}
+
+function getDisplayName(chat: any) {
+  const name = chat.contact_name;
+  const phone = chat.contact_phone || '';
+  // If name exists and is NOT just digits (i.e. not a raw ID), use it
+  if (name && !/^\d{10,}$/.test(name)) return name;
+  // Try to format phone
+  const formatted = formatPhoneDisplay(phone);
+  if (formatted) return formatted;
+  // Fallback
+  return phone || 'Desconhecido';
+}
+
 function initials(name: string) {
-  return name?.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase() || '?';
+  if (!name) return '?';
+  // If it starts with + (phone number), use last 2 digits
+  if (name.startsWith('+')) return name.slice(-2);
+  return name.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase() || '?';
+
 }
 
 function formatTime(date: string) {
