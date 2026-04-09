@@ -16,20 +16,27 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 
-function generateStrongPassword(): string {
+function generateStrongPassword(length = 24): string {
   const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
   const lower = 'abcdefghjkmnpqrstuvwxyz';
   const digits = '23456789';
   const special = '!@#$%&*';
   const all = upper + lower + digits + special;
-  const pick = (s: string) => s[Math.floor(Math.random() * s.length)];
-  let pwd = [pick(upper), pick(lower), pick(digits), pick(special)];
-  for (let i = 0; i < 12; i++) pwd.push(pick(all));
-  for (let i = pwd.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [pwd[i], pwd[j]] = [pwd[j], pwd[i]];
+  const randomIndex = (max: number) => crypto.getRandomValues(new Uint32Array(1))[0] % max;
+  const pick = (source: string) => source[randomIndex(source.length)];
+
+  const password = [pick(upper), pick(lower), pick(digits), pick(special)];
+
+  for (let i = password.length; i < length; i += 1) {
+    password.push(pick(all));
   }
-  return pwd.join('');
+
+  for (let i = password.length - 1; i > 0; i -= 1) {
+    const j = randomIndex(i + 1);
+    [password[i], password[j]] = [password[j], password[i]];
+  }
+
+  return password.join('');
 }
 
 export default function SettingsPage() {
@@ -88,8 +95,8 @@ export default function SettingsPage() {
       toast({ title: 'Preencha todos os campos obrigatórios', variant: 'destructive' });
       return;
     }
-    if (newPassword.length < 6) {
-      toast({ title: 'A senha deve ter no mínimo 6 caracteres', variant: 'destructive' });
+    if (newPassword.length < 8) {
+      toast({ title: 'A senha deve ter no mínimo 8 caracteres', variant: 'destructive' });
       return;
     }
 
@@ -124,7 +131,10 @@ export default function SettingsPage() {
       setNewRole('salesperson');
       refetchUsers();
     } catch (err: any) {
-      toast({ title: 'Erro ao criar usuário', description: err.message, variant: 'destructive' });
+      const description = err.message?.includes('Password is known to be weak')
+        ? 'Essa senha foi considerada fraca pelo sistema. Gere outra senha forte e tente novamente.'
+        : err.message;
+      toast({ title: 'Erro ao criar usuário', description, variant: 'destructive' });
     } finally {
       setCreating(false);
     }
@@ -187,7 +197,10 @@ export default function SettingsPage() {
       setShowResetPassword(false);
       setResetNewPassword('');
     } catch (err: any) {
-      toast({ title: 'Erro ao redefinir senha', description: err.message, variant: 'destructive' });
+      const description = err.message?.includes('Password is known to be weak')
+        ? 'Essa senha foi considerada fraca pelo sistema. Gere outra senha forte e tente novamente.'
+        : err.message;
+      toast({ title: 'Erro ao redefinir senha', description, variant: 'destructive' });
     } finally {
       setResettingPassword(false);
     }
