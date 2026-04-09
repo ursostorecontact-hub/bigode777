@@ -8,6 +8,86 @@ const corsHeaders = {
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
+// Download media from Evolution API and upload to Supabase storage
+async function downloadAndStoreMedia(
+  supabase: any,
+  evolutionUrl: string,
+  evolutionApiKey: string,
+  instanceName: string,
+  messageId: string,
+  mediaType: string,
+): Promise<string | null> {
+  try {
+    // Try to get base64 media from Evolution API
+    const mediaRes = await fetch(
+      `${evolutionUrl}/chat/getBase64FromMediaMessage/${instanceName}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: evolutionApiKey,
+        },
+        body: JSON.stringify({ message: { key: { id: messageId } } }),
+      }
+    );
+
+    if (!mediaRes.ok) {
+      console.log("Failed to download media:", mediaRes.status);
+      return null;
+    }
+
+    const mediaData = await mediaRes.json();
+    const base64 = mediaData?.base64;
+    const mimetype = mediaData?.mimetype || `${mediaType}/*`;
+
+    if (!base64) {
+      console.log("No base64 in media response");
+      return null;
+    }
+
+    // Determine file extension
+    const extMap: Record<string, string> = {
+      "audio/ogg": "ogg",
+      "audio/mpeg": "mp3",
+      "audio/mp4": "m4a",
+      "audio/aac": "aac",
+      "audio/opus": "opus",
+      "image/jpeg": "jpg",
+      "image/png": "png",
+      "image/webp": "webp",
+      "video/mp4": "mp4",
+      "application/pdf": "pdf",
+    };
+    const ext = extMap[mimetype] || mediaType;
+    const filePath = `webhook/${Date.now()}_${messageId.slice(-8)}.${ext}`;
+
+    // Decode base64 and upload
+    const binaryStr = atob(base64);
+    const bytes = new Uint8Array(binaryStr.length);
+    for (let i = 0; i < binaryStr.length; i++) {
+      bytes[i] = binaryStr.charCodeAt(i);
+    }
+
+    const { error: uploadError } = await supabase.storage
+      .from("whatsapp-media")
+      .upload(filePath, bytes.buffer, { contentType: mimetype, upsert: true });
+
+    if (uploadError) {
+      console.error("Upload error:", uploadError);
+      return null;
+    }
+
+    const { data: publicUrl } = supabase.storage
+      .from("whatsapp-media")
+      .getPublicUrl(filePath);
+
+    return publicUrl?.publicUrl || null;
+  } catch (err) {
+    console.error("Media download/upload error:", err);
+    return null;
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -19,7 +99,6 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Evolution API sends different event types
     const event = body.event;
     const instanceName = body.instance;
     const data = body.data;
@@ -30,10 +109,10 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Find the instance in our DB
+    // Find the instance in our DB (with evolution credentials)
     const { data: instance } = await supabase
       .from("whatsapp_instances")
-      .select("id")
+      .select("id, evolution_url, evolution_api_key, tenant_id")
       .eq("instance_name", instanceName)
       .single();
 
@@ -45,8 +124,6 @@ Deno.serve(async (req) => {
     }
 
     if (event === "messages.upsert") {
-      // Evolution API v2 can send data in different formats
-      // Sometimes data is the message directly, sometimes it's wrapped
       const msg = data;
       const key = msg.key || {};
       const remoteJid = key.remoteJid || msg.remoteJid || "";
@@ -65,7 +142,8 @@ Deno.serve(async (req) => {
       // Extract message content
       let content = "";
       let messageType = "text";
-      let mediaUrl = null;
+      let mediaUrl: string | null = null;
+      let needsMediaDownload = false;
 
       const message = msg.message || {};
       if (message.conversation) {
@@ -75,25 +153,40 @@ Deno.serve(async (req) => {
       } else if (message.imageMessage) {
         messageType = "image";
         content = message.imageMessage.caption || "📷 Imagem";
-        mediaUrl = message.imageMessage.url || data.mediaUrl || null;
+        needsMediaDownload = true;
       } else if (message.audioMessage) {
         messageType = "audio";
         content = "🎵 Áudio";
-        mediaUrl = message.audioMessage.url || data.mediaUrl || null;
+        needsMediaDownload = true;
       } else if (message.videoMessage) {
         messageType = "video";
         content = message.videoMessage.caption || "🎥 Vídeo";
-        mediaUrl = message.videoMessage.url || data.mediaUrl || null;
+        needsMediaDownload = true;
       } else if (message.documentMessage) {
         messageType = "document";
         content = message.documentMessage.fileName || "📄 Documento";
-        mediaUrl = message.documentMessage.url || data.mediaUrl || null;
+        needsMediaDownload = true;
       } else if (message.stickerMessage) {
         messageType = "sticker";
         content = "🎨 Sticker";
-        mediaUrl = message.stickerMessage.url || data.mediaUrl || null;
+        needsMediaDownload = true;
       } else {
         content = "Mensagem não suportada";
+      }
+
+      // Download and store media in our bucket
+      if (needsMediaDownload && messageId) {
+        const storedUrl = await downloadAndStoreMedia(
+          supabase,
+          instance.evolution_url,
+          instance.evolution_api_key,
+          instanceName,
+          messageId,
+          messageType,
+        );
+        if (storedUrl) {
+          mediaUrl = storedUrl;
+        }
       }
 
       const contactName = data.pushName || msg.pushName || remoteJid.split("@")[0];
@@ -119,7 +212,6 @@ Deno.serve(async (req) => {
 
       if (chatError) {
         console.error("Chat upsert error:", chatError);
-        // Try to get existing chat
         const { data: existingChat } = await supabase
           .from("whatsapp_chats")
           .select("*")
@@ -128,7 +220,6 @@ Deno.serve(async (req) => {
           .single();
 
         if (existingChat) {
-          // Update existing chat
           await supabase
             .from("whatsapp_chats")
             .update({
@@ -139,7 +230,6 @@ Deno.serve(async (req) => {
             })
             .eq("id", existingChat.id);
 
-          // Insert message
           await supabase.from("whatsapp_messages").insert({
             chat_id: existingChat.id,
             from_me: fromMe,
@@ -160,18 +250,10 @@ Deno.serve(async (req) => {
             .eq("id", chat.id);
         }
 
-        // Auto-create lead if this is a new contact (not from us)
+        // Auto-create lead if new contact
         if (!fromMe) {
-          // Get tenant_id from the instance
-          const { data: instData } = await supabase
-            .from("whatsapp_instances")
-            .select("tenant_id")
-            .eq("id", instance.id)
-            .single();
+          const tenantId = instance.tenant_id || null;
 
-          const tenantId = instData?.tenant_id || null;
-
-          // Check if a lead with this phone already exists for this tenant
           let leadQuery = supabase
             .from("leads")
             .select("id")
@@ -181,7 +263,6 @@ Deno.serve(async (req) => {
           const { data: existingLead } = await leadQuery.maybeSingle();
 
           if (!existingLead) {
-            // Also check if a client with this phone exists
             let clientQuery = supabase
               .from("clients")
               .select("id")
@@ -216,7 +297,7 @@ Deno.serve(async (req) => {
           }
         }
 
-        // Assign chat to a seller based on distribution if not yet assigned
+        // Assign chat to seller based on distribution
         if (!chat.assigned_to) {
           const { data: assignments } = await supabase
             .from("whatsapp_assignments")
@@ -225,7 +306,6 @@ Deno.serve(async (req) => {
             .order("percentage", { ascending: false });
 
           if (assignments && assignments.length > 0) {
-            // Count existing chats per seller for this instance
             const { data: chatCounts } = await supabase
               .from("whatsapp_chats")
               .select("assigned_to")
@@ -239,7 +319,6 @@ Deno.serve(async (req) => {
 
             const total = Object.values(counts).reduce((s, v) => s + v, 0) || 1;
 
-            // Find seller with biggest gap between target % and actual %
             let bestSeller = assignments[0].user_id;
             let bestGap = -Infinity;
 
@@ -257,7 +336,6 @@ Deno.serve(async (req) => {
               .update({ assigned_to: bestSeller })
               .eq("id", chat.id);
 
-            // Also assign the auto-created lead to the same seller
             if (contactPhone) {
               await supabase
                 .from("leads")
@@ -281,7 +359,6 @@ Deno.serve(async (req) => {
         });
       }
     } else if (event === "messages.update") {
-      // Status updates (delivered, read)
       const updates = Array.isArray(data) ? data : [data];
       for (const upd of updates) {
         const msgId = upd.key?.id;
@@ -300,7 +377,6 @@ Deno.serve(async (req) => {
         }
       }
     } else if (event === "connection.update") {
-      // Connection state change from Evolution API
       const state = data?.state || data?.status;
       if (state && instance) {
         const newStatus = state === "open" ? "connected" : "disconnected";

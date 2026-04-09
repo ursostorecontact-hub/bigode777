@@ -325,19 +325,24 @@ function ChatList({
                 </Avatar>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
-                    <p className="font-semibold text-sm text-foreground truncate">
-                      {getDisplayName(chat)}
-                    </p>
-                    <span className="text-[10px] text-muted-foreground shrink-0">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      {chat.unread_count > 0 && (
+                        <span className="h-2.5 w-2.5 rounded-full bg-green-500 shrink-0 animate-pulse" />
+                      )}
+                      <p className={`text-sm truncate ${chat.unread_count > 0 ? 'font-bold text-foreground' : 'font-semibold text-foreground'}`}>
+                        {getDisplayName(chat)}
+                      </p>
+                    </div>
+                    <span className="text-[10px] text-muted-foreground shrink-0 ml-1">
                       {chat.last_message_at ? formatTime(chat.last_message_at) : ''}
                     </span>
                   </div>
                   <div className="flex items-center justify-between mt-0.5">
-                    <p className="text-xs text-muted-foreground truncate pr-2">
+                    <p className={`text-xs truncate pr-2 ${chat.unread_count > 0 ? 'text-foreground font-medium' : 'text-muted-foreground'}`}>
                       {chat.last_message || 'Sem mensagens'}
                     </p>
                     {chat.unread_count > 0 && (
-                      <Badge className="h-5 min-w-[20px] text-[10px] bg-primary text-primary-foreground shrink-0">
+                      <Badge className="h-5 min-w-[20px] text-[10px] bg-green-500 text-white shrink-0">
                         {chat.unread_count}
                       </Badge>
                     )}
@@ -578,12 +583,18 @@ function MessageArea({
                             : 'bg-muted text-foreground rounded-bl-md'
                         } ${(msg as any).deleted_at ? 'opacity-60 italic' : ''}`}
                       >
-                        {(msg as any).deleted_at ? (
+                      {(msg as any).deleted_at ? (
                           <p className="text-xs">🚫 Mensagem apagada</p>
                         ) : msg.message_type === 'audio' && msg.media_url ? (
-                          <div className="flex items-center gap-2 min-w-[200px]">
+                          <div className="flex items-center gap-2 min-w-[240px]">
                             <Mic className="h-4 w-4 shrink-0 opacity-70" />
-                            <audio controls preload="none" className="h-8 max-w-[220px]" src={msg.media_url}>
+                            <audio
+                              controls
+                              preload="metadata"
+                              className="h-10 w-full max-w-[260px]"
+                              src={msg.media_url}
+                              style={{ minWidth: '200px' }}
+                            >
                               Seu navegador não suporta áudio.
                             </audio>
                           </div>
