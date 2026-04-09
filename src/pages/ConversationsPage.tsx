@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
@@ -319,6 +319,7 @@ function ChatList({
             >
               <button onClick={() => onSelect(chat.id)} className="flex items-center gap-3 flex-1 min-w-0 text-left">
                 <Avatar className="h-11 w-11 shrink-0">
+                  {chat.profile_picture_url && <AvatarImage src={chat.profile_picture_url} alt={getDisplayName(chat)} />}
                   <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">
                     {initials(getDisplayName(chat))}
                   </AvatarFallback>
@@ -511,6 +512,7 @@ function MessageArea({
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <Avatar className="h-10 w-10">
+          {chat?.profile_picture_url && <AvatarImage src={chat.profile_picture_url} alt={contactName} />}
           <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">
             {initials(contactName)}
           </AvatarFallback>
@@ -534,8 +536,8 @@ function MessageArea({
             </Button>
           )}
           {contactPhone && (
-            <a href={`tel:+${contactPhone}`}>
-              <Button variant="ghost" size="icon" className="h-9 w-9" title="Ligar">
+            <a href={`https://wa.me/${contactPhone}`} target="_blank" rel="noopener noreferrer">
+              <Button variant="ghost" size="icon" className="h-9 w-9" title="Ligar via WhatsApp">
                 <Phone className="h-4 w-4" />
               </Button>
             </a>

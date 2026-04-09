@@ -717,6 +717,7 @@ export type Database = {
           id: string
           last_message: string | null
           last_message_at: string | null
+          profile_picture_url: string | null
           remote_jid: string
           tenant_id: string | null
           unread_count: number
@@ -730,6 +731,7 @@ export type Database = {
           id?: string
           last_message?: string | null
           last_message_at?: string | null
+          profile_picture_url?: string | null
           remote_jid: string
           tenant_id?: string | null
           unread_count?: number
@@ -743,6 +745,7 @@ export type Database = {
           id?: string
           last_message?: string | null
           last_message_at?: string | null
+          profile_picture_url?: string | null
           remote_jid?: string
           tenant_id?: string | null
           unread_count?: number

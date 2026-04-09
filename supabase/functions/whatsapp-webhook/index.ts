@@ -192,21 +192,40 @@ Deno.serve(async (req) => {
       const contactName = data.pushName || msg.pushName || remoteJid.split("@")[0];
       const contactPhone = remoteJid.split("@")[0];
 
+      // Fetch profile picture
+      let profilePicUrl: string | null = null;
+      try {
+        const picRes = await fetch(
+          `${instance.evolution_url}/chat/fetchProfilePictureUrl/${instanceName}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json", apikey: instance.evolution_api_key },
+            body: JSON.stringify({ number: contactPhone }),
+          }
+        );
+        if (picRes.ok) {
+          const picData = await picRes.json();
+          profilePicUrl = picData?.profilePictureUrl || picData?.picture || null;
+        }
+      } catch (e) {
+        console.log("Profile pic fetch failed:", e);
+      }
+
       // Upsert chat
+      const upsertData: Record<string, any> = {
+        whatsapp_instance_id: instance.id,
+        remote_jid: remoteJid,
+        contact_phone: contactPhone,
+        last_message: content,
+        last_message_at: new Date().toISOString(),
+        unread_count: fromMe ? 0 : 1,
+      };
+      if (!fromMe) upsertData.contact_name = contactName;
+      if (profilePicUrl) upsertData.profile_picture_url = profilePicUrl;
+
       const { data: chat, error: chatError } = await supabase
         .from("whatsapp_chats")
-        .upsert(
-          {
-            whatsapp_instance_id: instance.id,
-            remote_jid: remoteJid,
-            contact_name: fromMe ? undefined : contactName,
-            contact_phone: contactPhone,
-            last_message: content,
-            last_message_at: new Date().toISOString(),
-            unread_count: fromMe ? 0 : 1,
-          },
-          { onConflict: "whatsapp_instance_id,remote_jid" }
-        )
+        .upsert(upsertData, { onConflict: "whatsapp_instance_id,remote_jid" })
         .select()
         .single();
 
