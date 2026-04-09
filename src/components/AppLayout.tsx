@@ -1,5 +1,6 @@
 import React from 'react';
 import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
+import { AiAssistantWidget } from '@/components/AiAssistantWidget';
 import { AppSidebar } from '@/components/AppSidebar';
 import { useAuth } from '@/contexts/AuthContext';
 import { Bell, Search } from 'lucide-react';
@@ -60,6 +61,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             {children}
           </main>
         </div>
+        <AiAssistantWidget />
       </div>
     </SidebarProvider>
   );
