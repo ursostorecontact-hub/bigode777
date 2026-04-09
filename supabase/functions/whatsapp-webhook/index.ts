@@ -310,6 +310,7 @@ Deno.serve(async (req) => {
           .eq("id", instance.id);
         console.log(`Connection update for ${instanceName}: ${newStatus}`);
       }
+    }
 
     return new Response(JSON.stringify({ ok: true }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
