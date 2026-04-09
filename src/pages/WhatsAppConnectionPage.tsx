@@ -156,20 +156,50 @@ function InstanceCard({ instance, profiles, onRefresh }: {
     setChecking(true);
     try {
       const result = await callWhatsAppQrcode({ action: 'status', instance_id: instance.id });
+      if (result.cached) {
+        // Server couldn't reach Evolution API, keep current state
+        setChecking(false);
+        return;
+      }
       const connected = result.status === 'connected';
       setStatus(connected ? 'connected' : 'disconnected');
+      failCount.current = 0;
       if (connected && qrInterval.current) {
         clearInterval(qrInterval.current);
         qrInterval.current = null;
         setQrCode(null);
       }
-    } catch { /* ignore */ }
+    } catch {
+      failCount.current++;
+      // Only mark disconnected after 3 consecutive failures
+      if (failCount.current < 3) {
+        console.log(`Status check failed (${failCount.current}/3), keeping current status`);
+      }
+    }
     setChecking(false);
   }, [instance.id]);
 
+  const handleReconnect = async () => {
+    setReconnecting(true);
+    try {
+      const result = await callWhatsAppQrcode({ action: 'reconnect', instance_id: instance.id });
+      setStatus(result.status || 'connecting');
+      if (result.status === 'connected') {
+        toast({ title: 'Reconectado com sucesso!' });
+      } else {
+        toast({ title: 'Tentando reconectar...', description: 'Pode levar alguns segundos' });
+        setTimeout(checkStatus, 5000);
+      }
+    } catch (err: any) {
+      toast({ title: 'Erro ao reconectar', description: err.message, variant: 'destructive' });
+    }
+    setReconnecting(false);
+  };
+
   useEffect(() => {
     checkStatus();
-    const iv = setInterval(checkStatus, 20000);
+    // Poll every 45s instead of 20s to reduce API pressure
+    const iv = setInterval(checkStatus, 45000);
     return () => {
       clearInterval(iv);
       if (qrInterval.current) clearInterval(qrInterval.current);
