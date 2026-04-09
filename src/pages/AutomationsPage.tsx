@@ -43,21 +43,20 @@ export default function AutomationsPage() {
   const [showNew, setShowNew] = useState(false);
   const [name, setName] = useState('');
   const [triggerType, setTriggerType] = useState('lead_created');
-  const [actionType, setActionType] = useState('webhook');
+  const [actionType, setActionType] = useState('whatsapp');
   const [messageTemplate, setMessageTemplate] = useState('');
   const [inactiveDays, setInactiveDays] = useState('3');
 
   // Config fields
-  const [webhookUrl, setWebhookUrl] = useState('');
   const [twilioFrom, setTwilioFrom] = useState('');
 
   const resetForm = () => {
     setName('');
     setTriggerType('lead_created');
-    setActionType('webhook');
+    setActionType('whatsapp');
     setMessageTemplate('');
     setInactiveDays('3');
-    setWebhookUrl('');
+    setTwilioFrom('');
     setTwilioFrom('');
   };
 
@@ -68,10 +67,7 @@ export default function AutomationsPage() {
     }
 
     const config: Record<string, string> = {};
-    if (actionType === 'webhook') {
-      if (!webhookUrl) { toast({ title: 'Informe a URL do webhook', variant: 'destructive' }); return; }
-      config.webhook_url = webhookUrl;
-    } else if (actionType === 'whatsapp') {
+    if (actionType === 'whatsapp') {
       // Uses the tenant's connected WhatsApp instance automatically
       config.use_tenant_instance = 'true';
     } else if (actionType === 'sms') {
@@ -205,19 +201,14 @@ export default function AutomationsPage() {
               <Select value={actionType} onValueChange={setActionType}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="webhook">Webhook (n8n)</SelectItem>
+                  <SelectItem value="whatsapp">WhatsApp (Evolution API)</SelectItem>
                   <SelectItem value="whatsapp">WhatsApp (Evolution API)</SelectItem>
                   <SelectItem value="sms">SMS (Twilio)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
-            {actionType === 'webhook' && (
-              <div className="space-y-2">
-                <Label>URL do Webhook *</Label>
-                <Input value={webhookUrl} onChange={e => setWebhookUrl(e.target.value)} placeholder="https://seu-n8n.com/webhook/..." />
-              </div>
-            )}
+
 
             {actionType === 'whatsapp' && (
               <div className="rounded-lg border border-border bg-muted/50 p-3">
