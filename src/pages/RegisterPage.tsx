@@ -165,8 +165,7 @@ export default function RegisterPage() {
             </div>
             <div className="space-y-2">
               <Label>Senha</Label>
-              <Input
-                type="password"
+              <PasswordInput
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Mínimo 6 caracteres"
