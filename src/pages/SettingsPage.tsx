@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Building2, Users, Key, Loader2, UserPlus, Trash2, Smartphone } from 'lucide-react';
+import { Building2, Users, Link, Key, Loader2, UserPlus, Trash2, Smartphone } from 'lucide-react';
 import { WhatsAppSettingsSection } from '@/components/WhatsAppSettingsSection';
 import { Switch } from '@/components/ui/switch';
 import { useSettings, useUpdateSettings, useProfilesWithRoles } from '@/hooks/use-leads';
@@ -23,7 +23,7 @@ export default function SettingsPage() {
   const { user } = useAuth();
 
   const [companyName, setCompanyName] = useState('');
-  
+  const [webhookUrl, setWebhookUrl] = useState('');
 
   // New user dialog state
   const [showNewUser, setShowNewUser] = useState(false);
@@ -36,7 +36,7 @@ export default function SettingsPage() {
   useEffect(() => {
     if (settings) {
       setCompanyName(settings.company_name || '');
-      
+      setWebhookUrl(settings.webhook_url || '');
     }
   }, [settings]);
 
@@ -46,6 +46,11 @@ export default function SettingsPage() {
     }
   };
 
+  const handleSaveIntegrations = () => {
+    if (settings) {
+      updateSettings.mutate({ id: settings.id, webhook_url: webhookUrl });
+    }
+  };
 
   const copyApiKey = () => {
     if (settings?.api_key) {
@@ -222,16 +227,28 @@ export default function SettingsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2"><Key className="h-4 w-4" />Chave de API</CardTitle>
-          <CardDescription>Use esta chave para integrações externas</CardDescription>
+          <CardTitle className="text-base flex items-center gap-2"><Link className="h-4 w-4" />Integrações</CardTitle>
+          <CardDescription>Webhooks e integrações externas</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
+            <Label>URL do Webhook (n8n)</Label>
+            <Input value={webhookUrl} onChange={e => setWebhookUrl(e.target.value)} placeholder="https://seu-n8n.com/webhook/..." />
+            <p className="text-xs text-muted-foreground">Será chamado quando um lead for criado ou atualizado</p>
+          </div>
+          <Separator />
+          <div className="space-y-2">
+            <Label className="flex items-center gap-2"><Key className="h-3 w-3" />Chave de API</Label>
             <div className="flex gap-2">
               <Input readOnly value={settings?.api_key || ''} className="font-mono text-xs" />
               <Button variant="outline" size="sm" onClick={copyApiKey}>Copiar</Button>
             </div>
+            <p className="text-xs text-muted-foreground">Use esta chave para integrações externas</p>
           </div>
+          <Button size="sm" onClick={handleSaveIntegrations} disabled={updateSettings.isPending}>
+            {updateSettings.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            Salvar Integrações
+          </Button>
         </CardContent>
       </Card>
 
