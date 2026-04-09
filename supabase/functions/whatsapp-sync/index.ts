@@ -201,6 +201,39 @@ Deno.serve(async (req) => {
           continue;
         }
 
+        // Auto-assign seller if chat has no assigned_to
+        if (!dbChat.assigned_to) {
+          const { data: assignments } = await supabase
+            .from("whatsapp_assignments")
+            .select("*")
+            .eq("whatsapp_instance_id", instance.id)
+            .order("percentage", { ascending: false });
+
+          if (assignments && assignments.length > 0) {
+            const { data: chatCounts } = await supabase
+              .from("whatsapp_chats")
+              .select("assigned_to")
+              .eq("whatsapp_instance_id", instance.id)
+              .not("assigned_to", "is", null);
+
+            const counts: Record<string, number> = {};
+            chatCounts?.forEach((c: any) => {
+              if (c.assigned_to) counts[c.assigned_to] = (counts[c.assigned_to] || 0) + 1;
+            });
+            const total = Object.values(counts).reduce((s, v) => s + v, 0) || 1;
+
+            let bestSeller = assignments[0].user_id;
+            let bestGap = -Infinity;
+            for (const a of assignments) {
+              const actual = ((counts[a.user_id] || 0) / total) * 100;
+              const gap = a.percentage - actual;
+              if (gap > bestGap) { bestGap = gap; bestSeller = a.user_id; }
+            }
+
+            await supabase.from("whatsapp_chats").update({ assigned_to: bestSeller }).eq("id", dbChat.id);
+          }
+        }
+
         syncedChats++;
 
         // 2. Fetch messages for this chat
