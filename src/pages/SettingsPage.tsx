@@ -238,6 +238,21 @@ export default function SettingsPage() {
                         <Button
                           variant="ghost"
                           size="icon"
+                          className="h-7 w-7 text-muted-foreground hover:text-primary hover:bg-primary/10"
+                          onClick={() => {
+                            setResetUserId(member.id);
+                            setResetUserName(member.full_name);
+                            setResetNewPassword('');
+                            setShowResetPassword(true);
+                          }}
+                          aria-label="Redefinir senha"
+                          title="Redefinir senha"
+                        >
+                          <KeyRound className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
                           className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
                           onClick={() => handleDeleteUser(member.id, member.full_name)}
                           aria-label="Remover usuário"
