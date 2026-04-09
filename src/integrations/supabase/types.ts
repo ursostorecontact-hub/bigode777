@@ -208,6 +208,58 @@ export type Database = {
           },
         ]
       }
+      label_assignments: {
+        Row: {
+          chat_id: string | null
+          created_at: string
+          id: string
+          label_id: string
+          lead_id: string | null
+          tenant_id: string | null
+          user_id: string
+        }
+        Insert: {
+          chat_id?: string | null
+          created_at?: string
+          id?: string
+          label_id: string
+          lead_id?: string | null
+          tenant_id?: string | null
+          user_id: string
+        }
+        Update: {
+          chat_id?: string | null
+          created_at?: string
+          id?: string
+          label_id?: string
+          lead_id?: string | null
+          tenant_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "label_assignments_chat_id_fkey"
+            columns: ["chat_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_chats"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "label_assignments_label_id_fkey"
+            columns: ["label_id"]
+            isOneToOne: false
+            referencedRelation: "user_labels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "label_assignments_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lead_sources: {
         Row: {
           active: boolean
@@ -566,6 +618,33 @@ export type Database = {
           slug?: string
           status?: Database["public"]["Enums"]["tenant_status"]
           updated_at?: string
+        }
+        Relationships: []
+      }
+      user_labels: {
+        Row: {
+          color: string
+          created_at: string
+          id: string
+          name: string
+          tenant_id: string | null
+          user_id: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          id?: string
+          name: string
+          tenant_id?: string | null
+          user_id: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          id?: string
+          name?: string
+          tenant_id?: string | null
+          user_id?: string
         }
         Relationships: []
       }
