@@ -16,6 +16,22 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 
+function generateStrongPassword(): string {
+  const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+  const lower = 'abcdefghjkmnpqrstuvwxyz';
+  const digits = '23456789';
+  const special = '!@#$%&*';
+  const all = upper + lower + digits + special;
+  const pick = (s: string) => s[Math.floor(Math.random() * s.length)];
+  let pwd = [pick(upper), pick(lower), pick(digits), pick(special)];
+  for (let i = 0; i < 12; i++) pwd.push(pick(all));
+  for (let i = pwd.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pwd[i], pwd[j]] = [pwd[j], pwd[i]];
+  }
+  return pwd.join('');
+}
+
 export default function SettingsPage() {
   const { data: settings, isLoading: settingsLoading } = useSettings();
   const { data: users, isLoading: usersLoading, refetch: refetchUsers } = useProfilesWithRoles();
