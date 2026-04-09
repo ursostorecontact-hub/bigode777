@@ -71,6 +71,7 @@ function AppRoutes() {
       <Route path="/privacidade" element={<PrivacyPage />} />
       <Route path="/sobre" element={<AboutPage />} />
       <Route path="/contato" element={<ContactPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
       
       {/* Protected routes */}
       <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
