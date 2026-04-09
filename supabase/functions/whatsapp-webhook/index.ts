@@ -256,6 +256,15 @@ Deno.serve(async (req) => {
               .from("whatsapp_chats")
               .update({ assigned_to: bestSeller })
               .eq("id", chat.id);
+
+            // Also assign the auto-created lead to the same seller
+            if (contactPhone) {
+              await supabase
+                .from("leads")
+                .update({ assigned_to: bestSeller })
+                .eq("phone", contactPhone)
+                .is("assigned_to", null);
+            }
           }
         }
 
