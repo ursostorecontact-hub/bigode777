@@ -346,6 +346,29 @@ export default function SettingsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Dialog para redefinir senha */}
+      <Dialog open={showResetPassword} onOpenChange={setShowResetPassword}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Redefinir Senha</DialogTitle>
+            <DialogDescription>Defina uma nova senha para {resetUserName}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Nova Senha *</Label>
+              <Input type="password" value={resetNewPassword} onChange={e => setResetNewPassword(e.target.value)} placeholder="Mínimo 6 caracteres" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowResetPassword(false)}>Cancelar</Button>
+            <Button onClick={handleResetPassword} disabled={resettingPassword}>
+              {resettingPassword && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Redefinir Senha
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
