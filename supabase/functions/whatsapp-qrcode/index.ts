@@ -7,26 +7,40 @@ const corsHeaders = {
 
 // Register the webhook URL on Evolution API so it pushes events to us
 async function registerWebhook(evolutionUrl: string, apiKey: string, instanceName: string, supabaseUrl: string) {
-  try {
-    const webhookUrl = `${supabaseUrl}/functions/v1/whatsapp-webhook`;
-    await fetch(`${evolutionUrl}/webhook/set/${instanceName}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", apikey: apiKey },
-      body: JSON.stringify({
-        enabled: true,
-        url: webhookUrl,
-        webhookByEvents: false,
-        events: [
-          "MESSAGES_UPSERT",
-          "MESSAGES_UPDATE",
-          "CONNECTION_UPDATE",
-          "QRCODE_UPDATED",
-        ],
-      }),
-    });
-    console.log(`Webhook registered for ${instanceName}: ${webhookUrl}`);
-  } catch (err) {
-    console.error("Failed to register webhook:", err);
+  const webhookUrl = `${supabaseUrl}/functions/v1/whatsapp-webhook`;
+  
+  // Try Evolution API v2 endpoint first, then v1
+  const endpoints = [
+    { url: `${evolutionUrl}/webhook/set/${instanceName}`, method: "POST" },
+    { url: `${evolutionUrl}/webhook/instance/${instanceName}`, method: "PUT" },
+  ];
+
+  for (const ep of endpoints) {
+    try {
+      const res = await fetch(ep.url, {
+        method: ep.method,
+        headers: { "Content-Type": "application/json", apikey: apiKey },
+        body: JSON.stringify({
+          enabled: true,
+          url: webhookUrl,
+          webhookByEvents: false,
+          events: [
+            "MESSAGES_UPSERT",
+            "MESSAGES_UPDATE",
+            "CONNECTION_UPDATE",
+            "QRCODE_UPDATED",
+            "messages.upsert",
+            "messages.update",
+            "connection.update",
+          ],
+        }),
+      });
+      const txt = await res.text();
+      console.log(`Webhook register (${ep.url}) status=${res.status}: ${txt.slice(0, 200)}`);
+      if (res.ok) return;
+    } catch (err) {
+      console.error(`Webhook register error (${ep.url}):`, err);
+    }
   }
 }
 
@@ -431,6 +445,39 @@ Deno.serve(async (req) => {
       }
 
       return new Response(JSON.stringify({ ok: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (action === "check_webhook") {
+      const { data: inst } = await adminClient
+        .from("whatsapp_instances")
+        .select("*")
+        .eq("id", instance_id)
+        .single();
+
+      if (!inst) throw new Error("Instância não encontrada");
+
+      // Check current webhook config
+      let currentWebhook = null;
+      try {
+        const checkRes = await fetch(`${inst.evolution_url}/webhook/find/${inst.instance_name}`, {
+          headers: { apikey: inst.evolution_api_key },
+        });
+        if (checkRes.ok) {
+          currentWebhook = await checkRes.json();
+        }
+      } catch (_) {}
+
+      // Re-register webhook
+      await registerWebhook(inst.evolution_url, inst.evolution_api_key, inst.instance_name, supabaseUrl);
+
+      return new Response(JSON.stringify({ 
+        ok: true, 
+        current_webhook: currentWebhook,
+        expected_url: `${supabaseUrl}/functions/v1/whatsapp-webhook`,
+        re_registered: true,
+      }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }

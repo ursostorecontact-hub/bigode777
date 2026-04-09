@@ -99,12 +99,15 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const event = body.event;
-    const instanceName = body.instance;
-    const data = body.data;
+    // Normalize event name: Evolution API v2 sends MESSAGES_UPSERT, v1 sends messages.upsert
+    const rawEvent = body.event || "";
+    const event = rawEvent.toLowerCase().replace(/_/g, ".");
+    const instanceName = body.instance || body.instanceName || body.sender || "";
+    const data = body.data || body;
 
-    if (!data) {
-      return new Response(JSON.stringify({ ok: true, skipped: "no data" }), {
+    if (!instanceName) {
+      console.log("No instance name in webhook body, keys:", Object.keys(body));
+      return new Response(JSON.stringify({ ok: true, skipped: "no instance name" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -122,6 +125,8 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    console.log("Processing event:", event, "for instance:", instanceName);
 
     if (event === "messages.upsert") {
       const msg = data;
@@ -377,7 +382,7 @@ Deno.serve(async (req) => {
           evolution_message_id: messageId,
         });
       }
-    } else if (event === "messages.update") {
+    } else if (event === "messages.update" || event === "messages.edited") {
       const updates = Array.isArray(data) ? data : [data];
       for (const upd of updates) {
         const msgId = upd.key?.id;

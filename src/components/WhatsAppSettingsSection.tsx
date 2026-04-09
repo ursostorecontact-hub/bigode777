@@ -228,6 +228,23 @@ export function WhatsAppSettingsSection() {
     setResyncingMedia(false);
   };
 
+  const handleRegisterWebhook = async () => {
+    if (!tenantInstance) return;
+    try {
+      const result = await callWhatsAppQrcode({
+        action: 'check_webhook',
+        instance_id: tenantInstance.id,
+      });
+      if (result.error) throw new Error(result.error);
+      toast({
+        title: 'Webhook registrado com sucesso!',
+        description: 'Mensagens do WhatsApp agora serão recebidas automaticamente.',
+      });
+    } catch (err: any) {
+      toast({ title: 'Erro ao registrar webhook', description: err.message, variant: 'destructive' });
+    }
+  };
+
   if (isLoading) {
     return (
       <Card>
@@ -304,6 +321,10 @@ export function WhatsAppSettingsSection() {
                 <Button variant="outline" size="sm" onClick={handleResyncMedia} disabled={resyncingMedia} className="gap-1.5 h-8 text-xs">
                   {resyncingMedia ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ImageIcon className="h-3.5 w-3.5" />}
                   Corrigir Mídias
+                </Button>
+                <Button variant="outline" size="sm" onClick={handleRegisterWebhook} className="gap-1.5 h-8 text-xs">
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  Ativar Recebimento
                 </Button>
               </>
             )}
