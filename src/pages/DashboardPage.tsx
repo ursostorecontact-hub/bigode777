@@ -1,18 +1,27 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Users, TrendingUp, CheckSquare, DollarSign, ArrowUp, ArrowDown, Loader2 } from 'lucide-react';
+import { Users, TrendingUp, CheckSquare, DollarSign, ArrowUp, ArrowDown, Loader2, Bell, BellOff } from 'lucide-react';
 import { formatCurrency } from '@/types/crm';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid, Legend } from 'recharts';
 import { useLeads, useTasks, useProfiles } from '@/hooks/use-leads';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
+import { Switch } from '@/components/ui/switch';
 
 export default function DashboardPage() {
   const { data: leads, isLoading: leadsLoading } = useLeads();
   const { data: tasks } = useTasks();
   const { data: profiles } = useProfiles();
   const queryClient = useQueryClient();
+  const [notificationsEnabled, setNotificationsEnabled] = useState(() => {
+    const saved = localStorage.getItem('whatsapp-notifications');
+    return saved !== 'false';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('whatsapp-notifications', String(notificationsEnabled));
+  }, [notificationsEnabled]);
 
   useEffect(() => {
     const channel = supabase
@@ -22,7 +31,7 @@ export default function DashboardPage() {
         { event: 'INSERT', schema: 'public', table: 'leads' },
         (payload) => {
           const newLead = payload.new as any;
-          if (newLead.source === 'WhatsApp') {
+          if (notificationsEnabled && newLead.source === 'WhatsApp') {
             toast.success('Novo lead via WhatsApp!', {
               description: `${newLead.name} — ${newLead.phone || 'Sem telefone'}`,
               duration: 8000,
@@ -36,7 +45,7 @@ export default function DashboardPage() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [queryClient]);
+  }, [queryClient, notificationsEnabled]);
 
   if (leadsLoading) {
     return (
