@@ -338,7 +338,13 @@ export default function SettingsPage() {
             </div>
             <div className="space-y-2">
               <Label>Senha *</Label>
-              <PasswordInput value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Mínimo 6 caracteres" />
+              <div className="flex gap-2">
+                <PasswordInput value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Mínimo 8 caracteres" className="flex-1" />
+                <Button type="button" variant="outline" size="icon" title="Gerar senha forte" onClick={() => setNewPassword(generateStrongPassword())}>
+                  <RefreshCw className="h-4 w-4" />
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">Use o botão para gerar uma senha forte automaticamente</p>
             </div>
             <div className="space-y-2">
               <Label>Função</Label>
