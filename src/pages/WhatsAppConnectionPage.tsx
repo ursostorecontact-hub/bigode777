@@ -130,6 +130,8 @@ function InstanceCard({ instance, profiles, onRefresh }: {
   const [qrLoading, setQrLoading] = useState(false);
   const [status, setStatus] = useState(instance.status || 'disconnected');
   const [checking, setChecking] = useState(false);
+  const [reconnecting, setReconnecting] = useState(false);
+  const failCount = useRef(0);
   const [localAssignments, setLocalAssignments] = useState<Record<string, number>>({});
   const [showAddSeller, setShowAddSeller] = useState(false);
   const [deleting, setDeleting] = useState(false);
