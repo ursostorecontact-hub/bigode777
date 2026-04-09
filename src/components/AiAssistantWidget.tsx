@@ -13,6 +13,7 @@ export function AiAssistantWidget() {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [executing, setExecuting] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -179,8 +180,9 @@ export function AiAssistantWidget() {
                 ))}
                 {loading && messages[messages.length - 1]?.role !== 'assistant' && (
                   <div className="flex justify-start">
-                    <div className="bg-muted rounded-2xl rounded-bl-md px-3 py-2">
+                    <div className="bg-muted rounded-2xl rounded-bl-md px-3 py-2 flex items-center gap-2">
                       <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                      {executing && <span className="text-xs text-muted-foreground">Executando ação...</span>}
                     </div>
                   </div>
                 )}
