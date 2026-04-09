@@ -584,7 +584,23 @@ function MessageArea({
                         } ${(msg as any).deleted_at ? 'opacity-60 italic' : ''}`}
                       >
                       {(msg as any).deleted_at ? (
-                          <p className="text-xs">🚫 Mensagem apagada</p>
+                          <div>
+                            <p className="text-[10px] text-destructive/70 mb-0.5 flex items-center gap-1">
+                              <Trash2 className="h-3 w-3" /> Apagada para o cliente
+                            </p>
+                            {msg.message_type === 'audio' && msg.media_url ? (
+                              <div className="flex items-center gap-2 min-w-[240px]">
+                                <Mic className="h-4 w-4 shrink-0 opacity-70" />
+                                <audio controls preload="metadata" className="h-10 w-full max-w-[260px]" src={msg.media_url} style={{ minWidth: '200px' }} />
+                              </div>
+                            ) : msg.message_type === 'image' && msg.media_url ? (
+                              <a href={msg.media_url} target="_blank" rel="noopener noreferrer">
+                                <img src={msg.media_url} alt="Imagem" className="rounded-lg max-w-[250px] max-h-[300px] object-cover cursor-pointer" loading="lazy" />
+                              </a>
+                            ) : (
+                              <p className="whitespace-pre-wrap break-words text-sm">{msg.content}</p>
+                            )}
+                          </div>
                         ) : msg.message_type === 'audio' && msg.media_url ? (
                           <div className="flex items-center gap-2 min-w-[240px]">
                             <Mic className="h-4 w-4 shrink-0 opacity-70" />
