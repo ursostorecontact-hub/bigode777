@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import {
   QrCode, Smartphone, Loader2, CheckCircle2, XCircle,
-  RefreshCw, Wifi, WifiOff, Phone, Trash2, MessageSquare,
+  RefreshCw, Wifi, WifiOff, Phone, Trash2, MessageSquare, Image as ImageIcon,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useWhatsAppInstances } from '@/hooks/use-integrations';
