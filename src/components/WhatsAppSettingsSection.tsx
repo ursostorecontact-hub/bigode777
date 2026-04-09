@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import {
   QrCode, Smartphone, Loader2, CheckCircle2, XCircle,
-  RefreshCw, Wifi, WifiOff, Phone, Trash2, MessageSquare,
+  RefreshCw, Wifi, WifiOff, Phone, Trash2, MessageSquare, Image as ImageIcon,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useWhatsAppInstances } from '@/hooks/use-integrations';
@@ -33,6 +33,7 @@ async function callWhatsAppQrcode(body: Record<string, unknown>) {
 }
 
 export function WhatsAppSettingsSection() {
+  const [resyncingMedia, setResyncingMedia] = useState(false);
   const { toast } = useToast();
   const { tenant } = useTenant();
   const { data: instances, isLoading, refetch } = useWhatsAppInstances();
@@ -201,6 +202,32 @@ export function WhatsAppSettingsSection() {
     setSyncing(false);
   };
 
+  const handleResyncMedia = async () => {
+    setResyncingMedia(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/whatsapp-resync-media`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session?.access_token}`,
+          },
+        },
+      );
+      const result = await res.json();
+      if (result.error) throw new Error(result.error);
+      toast({
+        title: 'Mídias corrigidas',
+        description: `${result.fixed || 0} mídias recuperadas de ${result.total || 0} pendentes`,
+      });
+    } catch (err: any) {
+      toast({ title: 'Erro', description: err.message, variant: 'destructive' });
+    }
+    setResyncingMedia(false);
+  };
+
   if (isLoading) {
     return (
       <Card>
@@ -269,10 +296,16 @@ export function WhatsAppSettingsSection() {
           </div>
           <div className="flex items-center gap-1.5">
             {isConnected && (
-              <Button variant="outline" size="sm" onClick={handleSyncMessages} disabled={syncing} className="gap-1.5 h-8 text-xs">
-                {syncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-                Importar Mensagens
-              </Button>
+              <>
+                <Button variant="outline" size="sm" onClick={handleSyncMessages} disabled={syncing} className="gap-1.5 h-8 text-xs">
+                  {syncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                  Importar Mensagens
+                </Button>
+                <Button variant="outline" size="sm" onClick={handleResyncMedia} disabled={resyncingMedia} className="gap-1.5 h-8 text-xs">
+                  {resyncingMedia ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ImageIcon className="h-3.5 w-3.5" />}
+                  Corrigir Mídias
+                </Button>
+              </>
             )}
             <Button variant="ghost" size="icon" onClick={handleDelete} disabled={deleting} className="text-muted-foreground hover:text-destructive h-8 w-8">
               {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
