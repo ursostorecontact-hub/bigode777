@@ -33,6 +33,13 @@ export default function SettingsPage() {
   const [newRole, setNewRole] = useState<string>('salesperson');
   const [creating, setCreating] = useState(false);
 
+  // Reset password dialog state
+  const [showResetPassword, setShowResetPassword] = useState(false);
+  const [resetUserId, setResetUserId] = useState('');
+  const [resetUserName, setResetUserName] = useState('');
+  const [resetNewPassword, setResetNewPassword] = useState('');
+  const [resettingPassword, setResettingPassword] = useState(false);
+
   useEffect(() => {
     if (settings) {
       setCompanyName(settings.company_name || '');
