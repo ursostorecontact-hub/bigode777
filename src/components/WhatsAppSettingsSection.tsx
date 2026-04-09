@@ -322,6 +322,10 @@ export function WhatsAppSettingsSection() {
                   {resyncingMedia ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ImageIcon className="h-3.5 w-3.5" />}
                   Corrigir Mídias
                 </Button>
+                <Button variant="outline" size="sm" onClick={handleRegisterWebhook} className="gap-1.5 h-8 text-xs">
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  Ativar Recebimento
+                </Button>
               </>
             )}
             <Button variant="ghost" size="icon" onClick={handleDelete} disabled={deleting} className="text-muted-foreground hover:text-destructive h-8 w-8">
