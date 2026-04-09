@@ -28,6 +28,7 @@ import NotFound from "@/pages/NotFound";
 import TermsPage from "@/pages/TermsPage";
 import PrivacyPage from "@/pages/PrivacyPage";
 import AboutPage from "@/pages/AboutPage";
+import ResetPasswordPage from "@/pages/ResetPasswordPage";
 import ContactPage from "@/pages/ContactPage";
 
 const queryClient = new QueryClient();
@@ -71,6 +72,7 @@ function AppRoutes() {
       <Route path="/privacidade" element={<PrivacyPage />} />
       <Route path="/sobre" element={<AboutPage />} />
       <Route path="/contato" element={<ContactPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
       
       {/* Protected routes */}
       <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
