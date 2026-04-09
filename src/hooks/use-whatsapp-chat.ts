@@ -18,9 +18,9 @@ export function useWhatsAppChats() {
       return data;
     },
     enabled: !!user,
+    refetchInterval: 8000, // Poll every 8s as fallback
   });
 
-  // Subscribe to realtime changes
   useEffect(() => {
     const channel = supabase
       .channel('whatsapp-chats-realtime')
@@ -51,15 +51,15 @@ export function useWhatsAppMessages(chatId: string | null) {
       return data;
     },
     enabled: !!chatId,
+    refetchInterval: 5000, // Poll every 5s as fallback for active chat
   });
 
-  // Subscribe to realtime changes for this chat
   useEffect(() => {
     if (!chatId) return;
     const channel = supabase
       .channel(`whatsapp-messages-${chatId}`)
       .on('postgres_changes', {
-        event: 'INSERT',
+        event: '*',
         schema: 'public',
         table: 'whatsapp_messages',
         filter: `chat_id=eq.${chatId}`,
