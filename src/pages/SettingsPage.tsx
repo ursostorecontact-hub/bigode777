@@ -150,6 +150,32 @@ export default function SettingsPage() {
     }
   };
 
+  const handleResetPassword = async () => {
+    if (!resetNewPassword || resetNewPassword.length < 6) {
+      toast({ title: 'A senha deve ter no mínimo 6 caracteres', variant: 'destructive' });
+      return;
+    }
+    setResettingPassword(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/reset-user-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ user_id: resetUserId, new_password: resetNewPassword }),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error);
+      toast({ title: 'Senha redefinida com sucesso!' });
+      setShowResetPassword(false);
+      setResetNewPassword('');
+    } catch (err: any) {
+      toast({ title: 'Erro ao redefinir senha', description: err.message, variant: 'destructive' });
+    } finally {
+      setResettingPassword(false);
+    }
+  };
+
   const roleLabels: Record<string, string> = { admin: 'Admin', manager: 'Gerente', salesperson: 'Vendedor' };
 
   if (settingsLoading || usersLoading) {
