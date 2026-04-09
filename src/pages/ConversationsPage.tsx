@@ -16,7 +16,7 @@ import { Label } from '@/components/ui/label';
 import {
   MessageSquare, Send, Loader2, Search, Phone, ArrowLeft,
   Check, CheckCheck, Clock, Mic, MicOff, UserPlus, Paperclip,
-  Image as ImageIcon, Video, FileText, X, Trash2,
+  Image as ImageIcon, Video, FileText, X, Trash2, Tag, Settings2,
 } from 'lucide-react';
 import {
   useWhatsAppChats,
@@ -28,6 +28,8 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { useLabels, useLabelAssignments, useAssignLabel, useUnassignLabel } from '@/hooks/use-labels';
+import { LabelManagerDialog, LabelAssignPopover, LabelBadges } from '@/components/LabelManager';
 
 function formatPhoneDisplay(phone: string) {
   if (!phone) return '';
@@ -226,23 +228,45 @@ function ChatList({
   onSelect,
   search,
   onSearchChange,
+  labels,
+  assignments,
+  onAssign,
+  onUnassign,
+  activeLabel,
+  onLabelFilter,
+  onManageLabels,
 }: {
   chats: any[];
   selectedId: string | null;
   onSelect: (id: string) => void;
   search: string;
   onSearchChange: (v: string) => void;
+  labels: any[];
+  assignments: any[];
+  onAssign: (labelId: string, chatId: string) => void;
+  onUnassign: (labelId: string, chatId: string) => void;
+  activeLabel: string | null;
+  onLabelFilter: (id: string | null) => void;
+  onManageLabels: () => void;
 }) {
-  const filtered = chats.filter(
+  const searchFiltered = chats.filter(
     (c) =>
       (c.contact_name || c.contact_phone || '').toLowerCase().includes(search.toLowerCase()) ||
       getDisplayName(c).toLowerCase().includes(search.toLowerCase())
   );
+  const filtered = activeLabel
+    ? searchFiltered.filter((c) => assignments.some((a: any) => a.chat_id === c.id && a.label_id === activeLabel))
+    : searchFiltered;
 
   return (
     <div className="flex flex-col h-full border-r border-border">
       <div className="p-3 border-b border-border bg-card">
-        <h2 className="font-bold text-foreground text-lg mb-2">Conversas</h2>
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="font-bold text-foreground text-lg">Conversas</h2>
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onManageLabels} title="Gerenciar etiquetas">
+            <Settings2 className="h-4 w-4" />
+          </Button>
+        </div>
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -252,6 +276,31 @@ function ChatList({
             className="pl-9 h-9 text-sm"
           />
         </div>
+        {/* Label tabs */}
+        {labels.length > 0 && (
+          <div className="flex gap-1 mt-2 overflow-x-auto pb-1 scrollbar-hide">
+            <button
+              onClick={() => onLabelFilter(null)}
+              className={`shrink-0 text-[11px] px-2 py-1 rounded-full transition-colors ${!activeLabel ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
+            >
+              Todas
+            </button>
+            {labels.map((label: any) => (
+              <button
+                key={label.id}
+                onClick={() => onLabelFilter(label.id === activeLabel ? null : label.id)}
+                className={`shrink-0 text-[11px] px-2 py-1 rounded-full transition-colors flex items-center gap-1`}
+                style={{
+                  backgroundColor: label.id === activeLabel ? label.color : label.color + '20',
+                  color: label.id === activeLabel ? '#fff' : label.color,
+                }}
+              >
+                <div className="h-2 w-2 rounded-full" style={{ backgroundColor: label.id === activeLabel ? '#fff' : label.color }} />
+                {label.name}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
       <ScrollArea className="flex-1">
         {filtered.length === 0 ? (
@@ -262,39 +311,51 @@ function ChatList({
           </div>
         ) : (
           filtered.map((chat) => (
-            <button
+            <div
               key={chat.id}
-              onClick={() => onSelect(chat.id)}
               className={`w-full flex items-center gap-3 p-3 text-left transition-colors hover:bg-muted/50 ${
                 selectedId === chat.id ? 'bg-primary/5 border-l-2 border-primary' : ''
               }`}
             >
-              <Avatar className="h-11 w-11 shrink-0">
-                <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">
-                  {initials(getDisplayName(chat))}
-                </AvatarFallback>
-              </Avatar>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between">
-                  <p className="font-semibold text-sm text-foreground truncate">
-                    {getDisplayName(chat)}
-                  </p>
-                  <span className="text-[10px] text-muted-foreground shrink-0">
-                    {chat.last_message_at ? formatTime(chat.last_message_at) : ''}
-                  </span>
+              <button onClick={() => onSelect(chat.id)} className="flex items-center gap-3 flex-1 min-w-0 text-left">
+                <Avatar className="h-11 w-11 shrink-0">
+                  <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">
+                    {initials(getDisplayName(chat))}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between">
+                    <p className="font-semibold text-sm text-foreground truncate">
+                      {getDisplayName(chat)}
+                    </p>
+                    <span className="text-[10px] text-muted-foreground shrink-0">
+                      {chat.last_message_at ? formatTime(chat.last_message_at) : ''}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between mt-0.5">
+                    <p className="text-xs text-muted-foreground truncate pr-2">
+                      {chat.last_message || 'Sem mensagens'}
+                    </p>
+                    {chat.unread_count > 0 && (
+                      <Badge className="h-5 min-w-[20px] text-[10px] bg-primary text-primary-foreground shrink-0">
+                        {chat.unread_count}
+                      </Badge>
+                    )}
+                  </div>
+                  <LabelBadges labelIds={(assignments || []).filter((a: any) => a.chat_id === chat.id).map((a: any) => a.label_id)} labels={labels} />
                 </div>
-                <div className="flex items-center justify-between mt-0.5">
-                  <p className="text-xs text-muted-foreground truncate pr-2">
-                    {chat.last_message || 'Sem mensagens'}
-                  </p>
-                  {chat.unread_count > 0 && (
-                    <Badge className="h-5 min-w-[20px] text-[10px] bg-primary text-primary-foreground shrink-0">
-                      {chat.unread_count}
-                    </Badge>
-                  )}
-                </div>
-              </div>
-            </button>
+              </button>
+              <LabelAssignPopover
+                chatId={chat.id}
+                currentAssignments={(assignments || []).filter((a: any) => a.chat_id === chat.id).map((a: any) => a.label_id)}
+                onAssign={(labelId) => onAssign(labelId, chat.id)}
+                onUnassign={(labelId) => onUnassign(labelId, chat.id)}
+              >
+                <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100" title="Etiquetar">
+                  <Tag className="h-3.5 w-3.5 text-muted-foreground" />
+                </Button>
+              </LabelAssignPopover>
+            </div>
           ))
         )}
       </ScrollArea>
