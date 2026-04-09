@@ -202,7 +202,31 @@ export function WhatsAppSettingsSection() {
     setSyncing(false);
   };
 
-  if (isLoading) {
+  const handleResyncMedia = async () => {
+    setResyncingMedia(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/whatsapp-resync-media`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session?.access_token}`,
+          },
+        },
+      );
+      const result = await res.json();
+      if (result.error) throw new Error(result.error);
+      toast({
+        title: 'Mídias corrigidas',
+        description: `${result.fixed || 0} mídias recuperadas de ${result.total || 0} pendentes`,
+      });
+    } catch (err: any) {
+      toast({ title: 'Erro', description: err.message, variant: 'destructive' });
+    }
+    setResyncingMedia(false);
+  };
     return (
       <Card>
         <CardContent className="flex items-center justify-center py-8">
