@@ -343,6 +343,12 @@ function InstanceCard({ instance, profiles, onRefresh }: {
                 Importar Mensagens
               </Button>
             )}
+            {!isConnected && (
+              <Button variant="outline" size="sm" onClick={handleReconnect} disabled={reconnecting} className="gap-1.5 h-8 text-xs">
+                {reconnecting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wifi className="h-3.5 w-3.5" />}
+                Reconectar
+              </Button>
+            )}
             <Button variant="ghost" size="icon" onClick={handleDelete} disabled={deleting} className="text-muted-foreground hover:text-destructive h-8 w-8">
               {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
             </Button>
