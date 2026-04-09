@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { PasswordInput } from '@/components/ui/password-input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -321,7 +322,7 @@ export default function SettingsPage() {
             </div>
             <div className="space-y-2">
               <Label>Senha *</Label>
-              <Input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Mínimo 6 caracteres" />
+              <PasswordInput value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Mínimo 6 caracteres" />
             </div>
             <div className="space-y-2">
               <Label>Função</Label>
@@ -357,7 +358,7 @@ export default function SettingsPage() {
           <div className="space-y-4 py-2">
             <div className="space-y-2">
               <Label>Nova Senha *</Label>
-              <Input type="password" value={resetNewPassword} onChange={e => setResetNewPassword(e.target.value)} placeholder="Mínimo 6 caracteres" />
+              <PasswordInput value={resetNewPassword} onChange={e => setResetNewPassword(e.target.value)} placeholder="Mínimo 6 caracteres" />
             </div>
           </div>
           <DialogFooter>
