@@ -236,31 +236,6 @@ export default function LeadsPage() {
                       })}
                     </SelectContent>
                   </Select>
-          {/* Label filter tabs */}
-          {(labels || []).length > 0 && (
-            <div className="flex gap-1 items-center overflow-x-auto">
-              <button
-                onClick={() => setLabelFilter(null)}
-                className={`shrink-0 text-xs px-2.5 py-1 rounded-full transition-colors ${!labelFilter ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
-              >
-                Todas
-              </button>
-              {(labels || []).map((label) => (
-                <button
-                  key={label.id}
-                  onClick={() => setLabelFilter(label.id === labelFilter ? null : label.id)}
-                  className="shrink-0 text-xs px-2.5 py-1 rounded-full transition-colors flex items-center gap-1"
-                  style={{
-                    backgroundColor: label.id === labelFilter ? label.color : label.color + '20',
-                    color: label.id === labelFilter ? '#fff' : label.color,
-                  }}
-                >
-                  <div className="h-2 w-2 rounded-full" style={{ backgroundColor: label.id === labelFilter ? '#fff' : label.color }} />
-                  {label.name}
-                </button>
-              ))}
-            </div>
-          )}
                 </div>
                 <div className="space-y-2">
                   <Label>Para (novo vendedor)</Label>
@@ -402,6 +377,31 @@ export default function LeadsPage() {
               </SelectContent>
             </Select>
           </div>
+          {/* Label filter tabs */}
+          {(labels || []).length > 0 && (
+            <div className="flex gap-1 items-center overflow-x-auto pt-2">
+              <button
+                onClick={() => setLabelFilter(null)}
+                className={`shrink-0 text-xs px-2.5 py-1 rounded-full transition-colors ${!labelFilter ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
+              >
+                Todas
+              </button>
+              {(labels || []).map((label) => (
+                <button
+                  key={label.id}
+                  onClick={() => setLabelFilter(label.id === labelFilter ? null : label.id)}
+                  className="shrink-0 text-xs px-2.5 py-1 rounded-full transition-colors flex items-center gap-1"
+                  style={{
+                    backgroundColor: label.id === labelFilter ? label.color : label.color + '20',
+                    color: label.id === labelFilter ? '#fff' : label.color,
+                  }}
+                >
+                  <div className="h-2 w-2 rounded-full" style={{ backgroundColor: label.id === labelFilter ? '#fff' : label.color }} />
+                  {label.name}
+                </button>
+              ))}
+            </div>
+          )}
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
