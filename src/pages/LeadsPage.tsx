@@ -10,13 +10,15 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Plus, Search, Filter, Download, MessageCircle, Pencil, Trash2, Loader2, ArrowRightLeft, Users } from 'lucide-react';
+import { Plus, Search, Filter, Download, MessageCircle, Pencil, Trash2, Loader2, ArrowRightLeft, Users, Tag, Settings2 } from 'lucide-react';
 import { formatCurrency, formatDate, type LeadStatus, PIPELINE_STAGES, LEAD_SOURCES } from '@/types/crm';
 import { useLeads, useCreateLead, useUpdateLead, useDeleteLead, useProfiles } from '@/hooks/use-leads';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
+import { useLabels, useLabelAssignments, useAssignLabel, useUnassignLabel } from '@/hooks/use-labels';
+import { LabelManagerDialog, LabelAssignPopover, LabelBadges } from '@/components/LabelManager';
 
 const statusConfig: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
   novo: { label: 'Novo', variant: 'default' },
@@ -35,9 +37,15 @@ export default function LeadsPage() {
   const updateLead = useUpdateLead();
   const deleteLead = useDeleteLead();
   const queryClient = useQueryClient();
+  const { data: labels } = useLabels();
+  const { data: leadAssignments } = useLabelAssignments('lead');
+  const assignLabel = useAssignLabel();
+  const unassignLabel = useUnassignLabel();
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [labelFilter, setLabelFilter] = useState<string | null>(null);
+  const [showLabelManager, setShowLabelManager] = useState(false);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [editLead, setEditLead] = useState<any>(null);
@@ -58,13 +66,16 @@ export default function LeadsPage() {
   const profileMap = Object.fromEntries((profiles || []).map(p => [p.id, p.full_name]));
 
   const allLeads = leads || [];
-  const filtered = allLeads.filter((lead) => {
+  const baseFiltered = allLeads.filter((lead) => {
     const matchesSearch = lead.name.toLowerCase().includes(search.toLowerCase()) ||
       (lead.phone || '').includes(search) ||
       (lead.email || '').toLowerCase().includes(search.toLowerCase());
     const matchesStatus = statusFilter === 'all' || lead.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
+  const filtered = labelFilter
+    ? baseFiltered.filter((lead) => (leadAssignments || []).some((a) => a.lead_id === lead.id && a.label_id === labelFilter))
+    : baseFiltered;
 
   const resetForm = () => setForm({ name: '', phone: '', email: '', source: 'Website', value: '', notes: '', assigned_to: '' });
 
@@ -202,6 +213,7 @@ export default function LeadsPage() {
         </div>
         <div className="flex gap-2 flex-wrap">
           <Button variant="outline" size="sm" onClick={handleExport}><Download className="h-4 w-4 mr-1" />Exportar</Button>
+          <Button variant="outline" size="sm" onClick={() => setShowLabelManager(true)}><Settings2 className="h-4 w-4 mr-1" />Etiquetas</Button>
 
           {/* Transfer ALL leads */}
           <Dialog open={transferAllOpen} onOpenChange={setTransferAllOpen}>
@@ -224,6 +236,31 @@ export default function LeadsPage() {
                       })}
                     </SelectContent>
                   </Select>
+          {/* Label filter tabs */}
+          {(labels || []).length > 0 && (
+            <div className="flex gap-1 items-center overflow-x-auto">
+              <button
+                onClick={() => setLabelFilter(null)}
+                className={`shrink-0 text-xs px-2.5 py-1 rounded-full transition-colors ${!labelFilter ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
+              >
+                Todas
+              </button>
+              {(labels || []).map((label) => (
+                <button
+                  key={label.id}
+                  onClick={() => setLabelFilter(label.id === labelFilter ? null : label.id)}
+                  className="shrink-0 text-xs px-2.5 py-1 rounded-full transition-colors flex items-center gap-1"
+                  style={{
+                    backgroundColor: label.id === labelFilter ? label.color : label.color + '20',
+                    color: label.id === labelFilter ? '#fff' : label.color,
+                  }}
+                >
+                  <div className="h-2 w-2 rounded-full" style={{ backgroundColor: label.id === labelFilter ? '#fff' : label.color }} />
+                  {label.name}
+                </button>
+              ))}
+            </div>
+          )}
                 </div>
                 <div className="space-y-2">
                   <Label>Para (novo vendedor)</Label>
@@ -385,6 +422,7 @@ export default function LeadsPage() {
                   <TableHead className="hidden lg:table-cell">Valor</TableHead>
                   <TableHead className="hidden lg:table-cell">Criado em</TableHead>
                   <TableHead className="w-[100px]">Ações</TableHead>
+                  <TableHead className="w-[40px]"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -419,6 +457,7 @@ export default function LeadsPage() {
                       <TableCell className="hidden lg:table-cell text-muted-foreground">{formatDate(lead.created_at)}</TableCell>
                       <TableCell>
                         <div className="flex gap-1">
+                          <LabelBadges labelIds={(leadAssignments || []).filter(a => a.lead_id === lead.id).map(a => a.label_id)} labels={labels || []} />
                           {lead.phone && (
                             <Button variant="ghost" size="icon" className="h-8 w-8" title="WhatsApp" asChild>
                               <a href={`https://wa.me/${lead.phone.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer">
@@ -433,6 +472,18 @@ export default function LeadsPage() {
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
+                      </TableCell>
+                      <TableCell>
+                        <LabelAssignPopover
+                          leadId={lead.id}
+                          currentAssignments={(leadAssignments || []).filter(a => a.lead_id === lead.id).map(a => a.label_id)}
+                          onAssign={(labelId) => assignLabel.mutate({ labelId, leadId: lead.id })}
+                          onUnassign={(labelId) => unassignLabel.mutate({ labelId, leadId: lead.id })}
+                        >
+                          <Button variant="ghost" size="icon" className="h-8 w-8" title="Etiquetar">
+                            <Tag className="h-4 w-4" />
+                          </Button>
+                        </LabelAssignPopover>
                       </TableCell>
                     </TableRow>
                   );
@@ -457,6 +508,7 @@ export default function LeadsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <LabelManagerDialog open={showLabelManager} onOpenChange={setShowLabelManager} />
     </div>
   );
 }
