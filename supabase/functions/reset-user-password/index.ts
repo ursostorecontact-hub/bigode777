@@ -50,10 +50,10 @@ Deno.serve(async (req) => {
       throw new Error("Use a opção de alterar senha no seu perfil");
     }
 
-    // Reset the user's password
+    // Reset the user's password using admin API
     const { error: updateError } = await adminClient.auth.admin.updateUser(user_id, {
       password: new_password,
-    });
+    } as any);
 
     if (updateError) throw updateError;
 
