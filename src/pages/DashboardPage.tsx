@@ -1,18 +1,27 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Users, TrendingUp, CheckSquare, DollarSign, ArrowUp, ArrowDown, Loader2 } from 'lucide-react';
+import { Users, TrendingUp, CheckSquare, DollarSign, ArrowUp, ArrowDown, Loader2, Bell, BellOff } from 'lucide-react';
 import { formatCurrency } from '@/types/crm';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid, Legend } from 'recharts';
 import { useLeads, useTasks, useProfiles } from '@/hooks/use-leads';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
+import { Switch } from '@/components/ui/switch';
 
 export default function DashboardPage() {
   const { data: leads, isLoading: leadsLoading } = useLeads();
   const { data: tasks } = useTasks();
   const { data: profiles } = useProfiles();
   const queryClient = useQueryClient();
+  const [notificationsEnabled, setNotificationsEnabled] = useState(() => {
+    const saved = localStorage.getItem('whatsapp-notifications');
+    return saved !== 'false';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('whatsapp-notifications', String(notificationsEnabled));
+  }, [notificationsEnabled]);
 
   useEffect(() => {
     const channel = supabase
@@ -22,7 +31,7 @@ export default function DashboardPage() {
         { event: 'INSERT', schema: 'public', table: 'leads' },
         (payload) => {
           const newLead = payload.new as any;
-          if (newLead.source === 'WhatsApp') {
+          if (notificationsEnabled && newLead.source === 'WhatsApp') {
             toast.success('Novo lead via WhatsApp!', {
               description: `${newLead.name} — ${newLead.phone || 'Sem telefone'}`,
               duration: 8000,
@@ -36,7 +45,7 @@ export default function DashboardPage() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [queryClient]);
+  }, [queryClient, notificationsEnabled]);
 
   if (leadsLoading) {
     return (
@@ -122,9 +131,16 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
-        <p className="text-muted-foreground text-sm">Visão geral do seu CRM</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
+          <p className="text-muted-foreground text-sm">Visão geral do seu CRM</p>
+        </div>
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          {notificationsEnabled ? <Bell className="h-4 w-4 text-primary" /> : <BellOff className="h-4 w-4" />}
+          <span className="hidden sm:inline">{notificationsEnabled ? 'Notificações ativas' : 'Notificações desligadas'}</span>
+          <Switch checked={notificationsEnabled} onCheckedChange={setNotificationsEnabled} />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
