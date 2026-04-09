@@ -578,12 +578,18 @@ function MessageArea({
                             : 'bg-muted text-foreground rounded-bl-md'
                         } ${(msg as any).deleted_at ? 'opacity-60 italic' : ''}`}
                       >
-                        {(msg as any).deleted_at ? (
+                      {(msg as any).deleted_at ? (
                           <p className="text-xs">🚫 Mensagem apagada</p>
                         ) : msg.message_type === 'audio' && msg.media_url ? (
-                          <div className="flex items-center gap-2 min-w-[200px]">
+                          <div className="flex items-center gap-2 min-w-[240px]">
                             <Mic className="h-4 w-4 shrink-0 opacity-70" />
-                            <audio controls preload="none" className="h-8 max-w-[220px]" src={msg.media_url}>
+                            <audio
+                              controls
+                              preload="metadata"
+                              className="h-10 w-full max-w-[260px]"
+                              src={msg.media_url}
+                              style={{ minWidth: '200px' }}
+                            >
                               Seu navegador não suporta áudio.
                             </audio>
                           </div>
