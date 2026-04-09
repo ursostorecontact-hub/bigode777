@@ -781,6 +781,12 @@ export default function ConversationsPage() {
   const { data: chats, isLoading } = useWhatsAppChats();
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [activeLabel, setActiveLabel] = useState<string | null>(null);
+  const [showLabelManager, setShowLabelManager] = useState(false);
+  const { data: labels } = useLabels();
+  const { data: chatAssignments } = useLabelAssignments('chat');
+  const assignLabel = useAssignLabel();
+  const unassignLabel = useUnassignLabel();
 
   const selectedChat = chats?.find((c) => c.id === selectedChatId);
 
@@ -801,6 +807,13 @@ export default function ConversationsPage() {
           onSelect={setSelectedChatId}
           search={search}
           onSearchChange={setSearch}
+          labels={labels || []}
+          assignments={chatAssignments || []}
+          onAssign={(labelId, chatId) => assignLabel.mutate({ labelId, chatId })}
+          onUnassign={(labelId, chatId) => unassignLabel.mutate({ labelId, chatId })}
+          activeLabel={activeLabel}
+          onLabelFilter={setActiveLabel}
+          onManageLabels={() => setShowLabelManager(true)}
         />
       </div>
       <div className={`flex-1 ${!selectedChatId ? 'hidden md:flex md:flex-col' : 'flex flex-col'}`}>
@@ -814,6 +827,7 @@ export default function ConversationsPage() {
           <EmptyChat />
         )}
       </div>
+      <LabelManagerDialog open={showLabelManager} onOpenChange={setShowLabelManager} />
     </div>
   );
 }
