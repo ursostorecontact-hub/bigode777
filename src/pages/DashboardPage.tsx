@@ -131,9 +131,16 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
-        <p className="text-muted-foreground text-sm">Visão geral do seu CRM</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
+          <p className="text-muted-foreground text-sm">Visão geral do seu CRM</p>
+        </div>
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          {notificationsEnabled ? <Bell className="h-4 w-4 text-primary" /> : <BellOff className="h-4 w-4" />}
+          <span className="hidden sm:inline">{notificationsEnabled ? 'Notificações ativas' : 'Notificações desligadas'}</span>
+          <Switch checked={notificationsEnabled} onCheckedChange={setNotificationsEnabled} />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
