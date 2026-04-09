@@ -606,18 +606,22 @@ function MessageArea({
                             <Mic className="h-4 w-4 shrink-0 opacity-70" />
                             <audio
                               controls
-                              preload="metadata"
+                              preload="auto"
                               className="h-10 w-full max-w-[260px]"
-                              src={msg.media_url}
                               style={{ minWidth: '200px' }}
                             >
+                              <source src={msg.media_url} type="audio/ogg; codecs=opus" />
+                              <source src={msg.media_url} type="audio/ogg" />
+                              <source src={msg.media_url} type="audio/mpeg" />
+                              <source src={msg.media_url} type="audio/mp4" />
+                              <source src={msg.media_url} />
                               Seu navegador não suporta áudio.
                             </audio>
                           </div>
                         ) : msg.message_type === 'audio' ? (
                           <div className="flex items-center gap-2">
                             <Mic className="h-4 w-4 shrink-0 opacity-70" />
-                            <span className="text-sm">🎤 Áudio</span>
+                            <span className="text-sm">🎤 Áudio (mídia indisponível)</span>
                           </div>
                         ) : msg.message_type === 'image' && msg.media_url ? (
                           <div>
@@ -627,6 +631,13 @@ function MessageArea({
                                 alt="Imagem"
                                 className="rounded-lg max-w-[250px] max-h-[300px] object-cover cursor-pointer"
                                 loading="lazy"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).style.display = 'none';
+                                  const fallback = document.createElement('p');
+                                  fallback.textContent = '📷 Imagem (mídia expirada)';
+                                  fallback.className = 'text-xs opacity-70';
+                                  (e.target as HTMLImageElement).parentElement?.appendChild(fallback);
+                                }}
                               />
                             </a>
                             {msg.content && msg.content !== '📷 Imagem' && (
@@ -637,10 +648,13 @@ function MessageArea({
                           <div>
                             <video
                               controls
-                              preload="none"
+                              preload="metadata"
                               className="rounded-lg max-w-[250px] max-h-[300px]"
-                              src={msg.media_url}
-                            />
+                              playsInline
+                            >
+                              <source src={msg.media_url} type="video/mp4" />
+                              <source src={msg.media_url} />
+                            </video>
                             {msg.content && msg.content !== '🎥 Vídeo' && (
                               <p className="whitespace-pre-wrap break-words mt-1">{msg.content}</p>
                             )}
@@ -655,11 +669,18 @@ function MessageArea({
                             <FileText className="h-4 w-4 shrink-0" />
                             <span className="text-sm">{msg.content || '📄 Documento'}</span>
                           </a>
+                        ) : msg.message_type === 'sticker' && msg.media_url ? (
+                          <img
+                            src={msg.media_url}
+                            alt="Sticker"
+                            className="max-w-[150px] max-h-[150px]"
+                            loading="lazy"
+                          />
                         ) : (
                           <>
                             {msg.message_type !== 'text' && (
                               <p className="text-xs opacity-70 mb-0.5">
-                                {msg.message_type === 'image' ? '📷 Imagem' : msg.message_type === 'video' ? '🎥 Vídeo' : msg.message_type}
+                                {msg.message_type === 'image' ? '📷 Imagem (mídia indisponível)' : msg.message_type === 'video' ? '🎥 Vídeo (mídia indisponível)' : msg.message_type === 'audio' ? '🎤 Áudio (mídia indisponível)' : msg.message_type}
                               </p>
                             )}
                             <p className="whitespace-pre-wrap break-words">{msg.content}</p>
