@@ -32,7 +32,7 @@ async function callWhatsAppQrcode(body: Record<string, unknown>) {
   return res.json();
 }
 
-export function WhatsAppSettingsSection() {
+const [resyncingMedia, setResyncingMedia] = useState(false);
   const { toast } = useToast();
   const { tenant } = useTenant();
   const { data: instances, isLoading, refetch } = useWhatsAppInstances();
