@@ -8,13 +8,29 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Building2, Users, Link, Key, Loader2, UserPlus, Trash2, Smartphone, KeyRound } from 'lucide-react';
+import { Building2, Users, Link, Key, Loader2, UserPlus, Trash2, Smartphone, KeyRound, RefreshCw } from 'lucide-react';
 import { WhatsAppSettingsSection } from '@/components/WhatsAppSettingsSection';
 import { Switch } from '@/components/ui/switch';
 import { useSettings, useUpdateSettings, useProfilesWithRoles } from '@/hooks/use-leads';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+
+function generateStrongPassword(): string {
+  const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+  const lower = 'abcdefghjkmnpqrstuvwxyz';
+  const digits = '23456789';
+  const special = '!@#$%&*';
+  const all = upper + lower + digits + special;
+  const pick = (s: string) => s[Math.floor(Math.random() * s.length)];
+  let pwd = [pick(upper), pick(lower), pick(digits), pick(special)];
+  for (let i = 0; i < 12; i++) pwd.push(pick(all));
+  for (let i = pwd.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pwd[i], pwd[j]] = [pwd[j], pwd[i]];
+  }
+  return pwd.join('');
+}
 
 export default function SettingsPage() {
   const { data: settings, isLoading: settingsLoading } = useSettings();
@@ -152,8 +168,8 @@ export default function SettingsPage() {
   };
 
   const handleResetPassword = async () => {
-    if (!resetNewPassword || resetNewPassword.length < 6) {
-      toast({ title: 'A senha deve ter no mínimo 6 caracteres', variant: 'destructive' });
+    if (!resetNewPassword || resetNewPassword.length < 8) {
+      toast({ title: 'A senha deve ter no mínimo 8 caracteres', variant: 'destructive' });
       return;
     }
     setResettingPassword(true);
@@ -322,7 +338,13 @@ export default function SettingsPage() {
             </div>
             <div className="space-y-2">
               <Label>Senha *</Label>
-              <PasswordInput value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Mínimo 6 caracteres" />
+              <div className="flex gap-2">
+                <PasswordInput value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Mínimo 8 caracteres" className="flex-1" />
+                <Button type="button" variant="outline" size="icon" title="Gerar senha forte" onClick={() => setNewPassword(generateStrongPassword())}>
+                  <RefreshCw className="h-4 w-4" />
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">Use o botão para gerar uma senha forte automaticamente</p>
             </div>
             <div className="space-y-2">
               <Label>Função</Label>
@@ -358,7 +380,13 @@ export default function SettingsPage() {
           <div className="space-y-4 py-2">
             <div className="space-y-2">
               <Label>Nova Senha *</Label>
-              <PasswordInput value={resetNewPassword} onChange={e => setResetNewPassword(e.target.value)} placeholder="Mínimo 6 caracteres" />
+              <div className="flex gap-2">
+                <PasswordInput value={resetNewPassword} onChange={e => setResetNewPassword(e.target.value)} placeholder="Mínimo 8 caracteres" className="flex-1" />
+                <Button type="button" variant="outline" size="icon" title="Gerar senha forte" onClick={() => setResetNewPassword(generateStrongPassword())}>
+                  <RefreshCw className="h-4 w-4" />
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">Use o botão para gerar uma senha forte automaticamente</p>
             </div>
           </div>
           <DialogFooter>
