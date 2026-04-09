@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Building2, Users, Link, Key, Loader2, UserPlus, Trash2, Smartphone } from 'lucide-react';
+import { Building2, Users, Link, Key, Loader2, UserPlus, Trash2, Smartphone, KeyRound } from 'lucide-react';
 import { WhatsAppSettingsSection } from '@/components/WhatsAppSettingsSection';
 import { Switch } from '@/components/ui/switch';
 import { useSettings, useUpdateSettings, useProfilesWithRoles } from '@/hooks/use-leads';
@@ -32,6 +32,13 @@ export default function SettingsPage() {
   const [newPassword, setNewPassword] = useState('');
   const [newRole, setNewRole] = useState<string>('salesperson');
   const [creating, setCreating] = useState(false);
+
+  // Reset password dialog state
+  const [showResetPassword, setShowResetPassword] = useState(false);
+  const [resetUserId, setResetUserId] = useState('');
+  const [resetUserName, setResetUserName] = useState('');
+  const [resetNewPassword, setResetNewPassword] = useState('');
+  const [resettingPassword, setResettingPassword] = useState(false);
 
   useEffect(() => {
     if (settings) {
@@ -143,6 +150,32 @@ export default function SettingsPage() {
     }
   };
 
+  const handleResetPassword = async () => {
+    if (!resetNewPassword || resetNewPassword.length < 6) {
+      toast({ title: 'A senha deve ter no mínimo 6 caracteres', variant: 'destructive' });
+      return;
+    }
+    setResettingPassword(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/reset-user-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ user_id: resetUserId, new_password: resetNewPassword }),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error);
+      toast({ title: 'Senha redefinida com sucesso!' });
+      setShowResetPassword(false);
+      setResetNewPassword('');
+    } catch (err: any) {
+      toast({ title: 'Erro ao redefinir senha', description: err.message, variant: 'destructive' });
+    } finally {
+      setResettingPassword(false);
+    }
+  };
+
   const roleLabels: Record<string, string> = { admin: 'Admin', manager: 'Gerente', salesperson: 'Vendedor' };
 
   if (settingsLoading || usersLoading) {
@@ -202,6 +235,21 @@ export default function SettingsPage() {
                           onCheckedChange={() => handleToggleActive(member.id, member.active)}
                           aria-label={member.active ? 'Desativar usuário' : 'Ativar usuário'}
                         />
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-muted-foreground hover:text-primary hover:bg-primary/10"
+                          onClick={() => {
+                            setResetUserId(member.id);
+                            setResetUserName(member.full_name);
+                            setResetNewPassword('');
+                            setShowResetPassword(true);
+                          }}
+                          aria-label="Redefinir senha"
+                          title="Redefinir senha"
+                        >
+                          <KeyRound className="h-4 w-4" />
+                        </Button>
                         <Button
                           variant="ghost"
                           size="icon"
@@ -294,6 +342,29 @@ export default function SettingsPage() {
             <Button onClick={handleCreateUser} disabled={creating}>
               {creating && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Criar Usuário
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog para redefinir senha */}
+      <Dialog open={showResetPassword} onOpenChange={setShowResetPassword}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Redefinir Senha</DialogTitle>
+            <DialogDescription>Defina uma nova senha para {resetUserName}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Nova Senha *</Label>
+              <Input type="password" value={resetNewPassword} onChange={e => setResetNewPassword(e.target.value)} placeholder="Mínimo 6 caracteres" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowResetPassword(false)}>Cancelar</Button>
+            <Button onClick={handleResetPassword} disabled={resettingPassword}>
+              {resettingPassword && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Redefinir Senha
             </Button>
           </DialogFooter>
         </DialogContent>
