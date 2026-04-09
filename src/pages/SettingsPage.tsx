@@ -168,8 +168,8 @@ export default function SettingsPage() {
   };
 
   const handleResetPassword = async () => {
-    if (!resetNewPassword || resetNewPassword.length < 6) {
-      toast({ title: 'A senha deve ter no mínimo 6 caracteres', variant: 'destructive' });
+    if (!resetNewPassword || resetNewPassword.length < 8) {
+      toast({ title: 'A senha deve ter no mínimo 8 caracteres', variant: 'destructive' });
       return;
     }
     setResettingPassword(true);
