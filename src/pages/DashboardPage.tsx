@@ -1,14 +1,42 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Users, TrendingUp, CheckSquare, DollarSign, ArrowUp, ArrowDown, Loader2 } from 'lucide-react';
 import { formatCurrency } from '@/types/crm';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid, Legend } from 'recharts';
 import { useLeads, useTasks, useProfiles } from '@/hooks/use-leads';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+import { useQueryClient } from '@tanstack/react-query';
 
 export default function DashboardPage() {
   const { data: leads, isLoading: leadsLoading } = useLeads();
   const { data: tasks } = useTasks();
   const { data: profiles } = useProfiles();
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    const channel = supabase
+      .channel('new-whatsapp-leads')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'leads' },
+        (payload) => {
+          const newLead = payload.new as any;
+          if (newLead.source === 'WhatsApp') {
+            toast.success('Novo lead via WhatsApp!', {
+              description: `${newLead.name} — ${newLead.phone || 'Sem telefone'}`,
+              duration: 8000,
+            });
+          }
+          queryClient.invalidateQueries({ queryKey: ['leads'] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
 
   if (leadsLoading) {
     return (
