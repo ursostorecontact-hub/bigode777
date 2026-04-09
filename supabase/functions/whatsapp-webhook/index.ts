@@ -299,6 +299,17 @@ Deno.serve(async (req) => {
             .eq("evolution_message_id", msgId);
         }
       }
+    } else if (event === "connection.update") {
+      // Connection state change from Evolution API
+      const state = data?.state || data?.status;
+      if (state && instance) {
+        const newStatus = state === "open" ? "connected" : "disconnected";
+        await supabase
+          .from("whatsapp_instances")
+          .update({ status: newStatus })
+          .eq("id", instance.id);
+        console.log(`Connection update for ${instanceName}: ${newStatus}`);
+      }
     }
 
     return new Response(JSON.stringify({ ok: true }), {
