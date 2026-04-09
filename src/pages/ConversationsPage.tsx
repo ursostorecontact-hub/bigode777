@@ -319,6 +319,7 @@ function ChatList({
             >
               <button onClick={() => onSelect(chat.id)} className="flex items-center gap-3 flex-1 min-w-0 text-left">
                 <Avatar className="h-11 w-11 shrink-0">
+                  {chat.profile_picture_url && <AvatarImage src={chat.profile_picture_url} alt={getDisplayName(chat)} />}
                   <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">
                     {initials(getDisplayName(chat))}
                   </AvatarFallback>
@@ -511,6 +512,7 @@ function MessageArea({
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <Avatar className="h-10 w-10">
+          {chat?.profile_picture_url && <AvatarImage src={chat.profile_picture_url} alt={contactName} />}
           <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">
             {initials(contactName)}
           </AvatarFallback>
