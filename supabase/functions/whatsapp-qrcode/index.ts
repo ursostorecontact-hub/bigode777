@@ -5,6 +5,31 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+// Register the webhook URL on Evolution API so it pushes events to us
+async function registerWebhook(evolutionUrl: string, apiKey: string, instanceName: string, supabaseUrl: string) {
+  try {
+    const webhookUrl = `${supabaseUrl}/functions/v1/whatsapp-webhook`;
+    await fetch(`${evolutionUrl}/webhook/set/${instanceName}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", apikey: apiKey },
+      body: JSON.stringify({
+        enabled: true,
+        url: webhookUrl,
+        webhookByEvents: false,
+        events: [
+          "MESSAGES_UPSERT",
+          "MESSAGES_UPDATE",
+          "CONNECTION_UPDATE",
+          "QRCODE_UPDATED",
+        ],
+      }),
+    });
+    console.log(`Webhook registered for ${instanceName}: ${webhookUrl}`);
+  } catch (err) {
+    console.error("Failed to register webhook:", err);
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -47,7 +72,6 @@ Deno.serve(async (req) => {
     const { action, instance_id, evolution_url, evolution_api_key, instance_name, name, phone, message } = await req.json();
 
     if (action === "create") {
-      // Try to create instance on Evolution API (ignore if already exists)
       const createRes = await fetch(`${evolution_url}/instance/create`, {
         method: "POST",
         headers: { "Content-Type": "application/json", apikey: evolution_api_key },
@@ -55,6 +79,8 @@ Deno.serve(async (req) => {
           instanceName: instance_name,
           integration: "WHATSAPP-BAILEYS",
           qrcode: true,
+          rejectCall: false,
+          alwaysOnline: true,
         }),
       });
 
@@ -69,6 +95,9 @@ Deno.serve(async (req) => {
         createData = await createRes.json();
       }
 
+      // Register webhook for this instance
+      await registerWebhook(evolution_url, evolution_api_key, instance_name, supabaseUrl);
+
       // Check if already connected
       const stateRes = await fetch(
         `${evolution_url}/instance/connectionState/${instance_name}`,
@@ -80,9 +109,10 @@ Deno.serve(async (req) => {
         if (stateData?.instance?.state === "open") {
           initialStatus = "connected";
         }
+      } else {
+        await stateRes.text();
       }
 
-      // If not connected, get QR code
       let qrcode = createData.qrcode || null;
       if (initialStatus !== "connected" && !qrcode) {
         const qrRes = await fetch(
@@ -92,10 +122,11 @@ Deno.serve(async (req) => {
         if (qrRes.ok) {
           const qrData = await qrRes.json();
           qrcode = qrData.base64 || qrData.qrcode?.base64 || qrData;
+        } else {
+          await qrRes.text();
         }
       }
 
-      // Save to DB
       const { data: saved, error: saveErr } = await adminClient
         .from("whatsapp_instances")
         .insert({
@@ -128,13 +159,14 @@ Deno.serve(async (req) => {
 
       if (!inst) throw new Error("Instância não encontrada");
 
-      // Ensure instance exists on Evolution API (recreate if needed)
+      // Ensure instance exists on Evolution API
       const checkRes = await fetch(
         `${inst.evolution_url}/instance/connectionState/${inst.instance_name}`,
         { headers: { apikey: inst.evolution_api_key } }
       );
+
       if (!checkRes.ok) {
-        // Instance doesn't exist on Evolution, recreate it
+        // Recreate instance
         const createRes = await fetch(`${inst.evolution_url}/instance/create`, {
           method: "POST",
           headers: { "Content-Type": "application/json", apikey: inst.evolution_api_key },
@@ -142,6 +174,7 @@ Deno.serve(async (req) => {
             instanceName: inst.instance_name,
             integration: "WHATSAPP-BAILEYS",
             qrcode: true,
+            alwaysOnline: true,
           }),
         });
         if (!createRes.ok && createRes.status !== 409) {
@@ -149,15 +182,22 @@ Deno.serve(async (req) => {
           if (!err.includes("already in use")) {
             throw new Error(`Evolution API: ${err}`);
           }
+        } else {
+          await createRes.text();
         }
-        if (createRes.ok || createRes.status === 409) {
-          await createRes.text(); // consume body
-        }
+        // Re-register webhook after recreate
+        await registerWebhook(inst.evolution_url, inst.evolution_api_key, inst.instance_name, supabaseUrl);
       } else {
-        await checkRes.text(); // consume body
+        const stateData = await checkRes.json();
+        // If already connected, just return
+        if (stateData?.instance?.state === "open") {
+          await adminClient.from("whatsapp_instances").update({ status: "connected" }).eq("id", instance_id);
+          return new Response(JSON.stringify({ status: "connected", alreadyConnected: true }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
       }
 
-      // Now get QR code
       const qrRes = await fetch(
         `${inst.evolution_url}/instance/connect/${inst.instance_name}`,
         { headers: { apikey: inst.evolution_api_key } }
@@ -187,26 +227,91 @@ Deno.serve(async (req) => {
 
       if (!inst) throw new Error("Instância não encontrada");
 
-      const statusRes = await fetch(
+      let newStatus = inst.status || "disconnected";
+      let rawData: any = null;
+
+      try {
+        const statusRes = await fetch(
+          `${inst.evolution_url}/instance/connectionState/${inst.instance_name}`,
+          { 
+            headers: { apikey: inst.evolution_api_key },
+            signal: AbortSignal.timeout(10000),
+          }
+        );
+
+        if (statusRes.ok) {
+          rawData = await statusRes.json();
+          newStatus = rawData.instance?.state === "open" ? "connected" : "disconnected";
+        } else {
+          await statusRes.text();
+          // Don't change status on API error — keep last known state
+        }
+      } catch (err) {
+        // Network timeout or error — keep existing status, don't mark as disconnected
+        console.log(`Status check timeout/error for ${inst.instance_name}, keeping status: ${inst.status}`);
+        return new Response(JSON.stringify({ status: inst.status, raw: null, cached: true }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Only update DB if status actually changed
+      if (newStatus !== inst.status) {
+        await adminClient
+          .from("whatsapp_instances")
+          .update({ status: newStatus })
+          .eq("id", instance_id);
+      }
+
+      // If reconnected, ensure webhook is registered
+      if (newStatus === "connected" && inst.status !== "connected") {
+        await registerWebhook(inst.evolution_url, inst.evolution_api_key, inst.instance_name, supabaseUrl);
+      }
+
+      return new Response(JSON.stringify({ status: newStatus, raw: rawData }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (action === "reconnect") {
+      const { data: inst } = await adminClient
+        .from("whatsapp_instances")
+        .select("*")
+        .eq("id", instance_id)
+        .single();
+
+      if (!inst) throw new Error("Instância não encontrada");
+
+      // Try to restart the instance on Evolution API
+      try {
+        await fetch(`${inst.evolution_url}/instance/restart/${inst.instance_name}`, {
+          method: "PUT",
+          headers: { apikey: inst.evolution_api_key },
+        });
+      } catch (_) { /* ignore */ }
+
+      // Wait and check status
+      await new Promise(r => setTimeout(r, 2000));
+
+      const stateRes = await fetch(
         `${inst.evolution_url}/instance/connectionState/${inst.instance_name}`,
         { headers: { apikey: inst.evolution_api_key } }
       );
 
       let newStatus = "disconnected";
-      let rawData: any = null;
-      if (statusRes.ok) {
-        rawData = await statusRes.json();
-        newStatus = rawData.instance?.state === "open" ? "connected" : "disconnected";
+      if (stateRes.ok) {
+        const stateData = await stateRes.json();
+        newStatus = stateData?.instance?.state === "open" ? "connected" : "connecting";
       } else {
-        await statusRes.text();
+        await stateRes.text();
       }
 
-      await adminClient
-        .from("whatsapp_instances")
-        .update({ status: newStatus })
-        .eq("id", instance_id);
+      await adminClient.from("whatsapp_instances").update({ status: newStatus }).eq("id", instance_id);
 
-      return new Response(JSON.stringify({ status: newStatus, raw: rawData }), {
+      if (newStatus === "connected") {
+        await registerWebhook(inst.evolution_url, inst.evolution_api_key, inst.instance_name, supabaseUrl);
+      }
+
+      return new Response(JSON.stringify({ status: newStatus }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -219,12 +324,10 @@ Deno.serve(async (req) => {
         .single();
 
       if (!inst) throw new Error("Instância não encontrada");
-
       if (!phone) throw new Error("Informe o número de telefone");
 
       const cleanPhone = phone.replace(/\D/g, "");
 
-      // Delete existing instance and recreate with qrcode:false for pairing code support
       try {
         await fetch(`${inst.evolution_url}/instance/logout/${inst.instance_name}`, {
           method: "DELETE",
@@ -238,7 +341,6 @@ Deno.serve(async (req) => {
         });
       } catch (_) { /* ignore */ }
 
-      // Recreate instance with qrcode:false (required for pairing codes)
       const createRes = await fetch(`${inst.evolution_url}/instance/create`, {
         method: "POST",
         headers: { "Content-Type": "application/json", apikey: inst.evolution_api_key },
@@ -246,6 +348,7 @@ Deno.serve(async (req) => {
           instanceName: inst.instance_name,
           integration: "WHATSAPP-BAILEYS",
           qrcode: false,
+          alwaysOnline: true,
         }),
       });
       if (!createRes.ok && createRes.status !== 409) {
@@ -257,16 +360,14 @@ Deno.serve(async (req) => {
         await createRes.text();
       }
 
-      // Wait briefly for instance to initialize
+      // Re-register webhook after recreate
+      await registerWebhook(inst.evolution_url, inst.evolution_api_key, inst.instance_name, supabaseUrl);
+
       await new Promise(r => setTimeout(r, 1000));
 
-      // Request pairing code with phone number as query param
       const pairRes = await fetch(
         `${inst.evolution_url}/instance/connect/${inst.instance_name}?number=${cleanPhone}`,
-        {
-          method: "GET",
-          headers: { apikey: inst.evolution_api_key },
-        }
+        { method: "GET", headers: { apikey: inst.evolution_api_key } }
       );
 
       if (!pairRes.ok) {
@@ -288,14 +389,12 @@ Deno.serve(async (req) => {
         .single();
 
       if (inst) {
-        // Try to delete from Evolution API
         try {
           await fetch(`${inst.evolution_url}/instance/delete/${inst.instance_name}`, {
             method: "DELETE",
             headers: { apikey: inst.evolution_api_key },
           });
         } catch (_) { /* ignore */ }
-
         await adminClient.from("whatsapp_instances").delete().eq("id", instance_id);
       }
 
