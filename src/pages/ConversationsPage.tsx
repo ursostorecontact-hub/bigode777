@@ -325,19 +325,24 @@ function ChatList({
                 </Avatar>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
-                    <p className="font-semibold text-sm text-foreground truncate">
-                      {getDisplayName(chat)}
-                    </p>
-                    <span className="text-[10px] text-muted-foreground shrink-0">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      {chat.unread_count > 0 && (
+                        <span className="h-2.5 w-2.5 rounded-full bg-green-500 shrink-0 animate-pulse" />
+                      )}
+                      <p className={`text-sm truncate ${chat.unread_count > 0 ? 'font-bold text-foreground' : 'font-semibold text-foreground'}`}>
+                        {getDisplayName(chat)}
+                      </p>
+                    </div>
+                    <span className="text-[10px] text-muted-foreground shrink-0 ml-1">
                       {chat.last_message_at ? formatTime(chat.last_message_at) : ''}
                     </span>
                   </div>
                   <div className="flex items-center justify-between mt-0.5">
-                    <p className="text-xs text-muted-foreground truncate pr-2">
+                    <p className={`text-xs truncate pr-2 ${chat.unread_count > 0 ? 'text-foreground font-medium' : 'text-muted-foreground'}`}>
                       {chat.last_message || 'Sem mensagens'}
                     </p>
                     {chat.unread_count > 0 && (
-                      <Badge className="h-5 min-w-[20px] text-[10px] bg-primary text-primary-foreground shrink-0">
+                      <Badge className="h-5 min-w-[20px] text-[10px] bg-green-500 text-white shrink-0">
                         {chat.unread_count}
                       </Badge>
                     )}
