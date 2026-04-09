@@ -449,6 +449,39 @@ Deno.serve(async (req) => {
       });
     }
 
+    if (action === "check_webhook") {
+      const { data: inst } = await adminClient
+        .from("whatsapp_instances")
+        .select("*")
+        .eq("id", instance_id)
+        .single();
+
+      if (!inst) throw new Error("Instância não encontrada");
+
+      // Check current webhook config
+      let currentWebhook = null;
+      try {
+        const checkRes = await fetch(`${inst.evolution_url}/webhook/find/${inst.instance_name}`, {
+          headers: { apikey: inst.evolution_api_key },
+        });
+        if (checkRes.ok) {
+          currentWebhook = await checkRes.json();
+        }
+      } catch (_) {}
+
+      // Re-register webhook
+      await registerWebhook(inst.evolution_url, inst.evolution_api_key, inst.instance_name, supabaseUrl);
+
+      return new Response(JSON.stringify({ 
+        ok: true, 
+        current_webhook: currentWebhook,
+        expected_url: `${supabaseUrl}/functions/v1/whatsapp-webhook`,
+        re_registered: true,
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     throw new Error("Ação inválida");
   } catch (err: any) {
     return new Response(JSON.stringify({ error: err.message }), {
