@@ -591,7 +591,11 @@ function MessageArea({
                             {msg.message_type === 'audio' && msg.media_url ? (
                               <div className="flex items-center gap-2 min-w-[240px]">
                                 <Mic className="h-4 w-4 shrink-0 opacity-70" />
-                                <audio controls preload="metadata" className="h-10 w-full max-w-[260px]" src={msg.media_url} style={{ minWidth: '200px' }} />
+                                <audio controls preload="auto" className="h-10 w-full max-w-[260px]" style={{ minWidth: '200px' }}>
+                                  <source src={msg.media_url} type="audio/ogg; codecs=opus" />
+                                  <source src={msg.media_url} type="audio/ogg" />
+                                  <source src={msg.media_url} />
+                                </audio>
                               </div>
                             ) : msg.message_type === 'image' && msg.media_url ? (
                               <a href={msg.media_url} target="_blank" rel="noopener noreferrer">
