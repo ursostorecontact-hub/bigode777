@@ -160,6 +160,62 @@ Deno.serve(async (req) => {
             .eq("id", chat.id);
         }
 
+        // Auto-create lead if this is a new contact (not from us)
+        if (!fromMe) {
+          // Get tenant_id from the instance
+          const { data: instData } = await supabase
+            .from("whatsapp_instances")
+            .select("tenant_id")
+            .eq("id", instance.id)
+            .single();
+
+          const tenantId = instData?.tenant_id || null;
+
+          // Check if a lead with this phone already exists for this tenant
+          let leadQuery = supabase
+            .from("leads")
+            .select("id")
+            .eq("phone", contactPhone);
+          if (tenantId) leadQuery = leadQuery.eq("tenant_id", tenantId);
+
+          const { data: existingLead } = await leadQuery.maybeSingle();
+
+          if (!existingLead) {
+            // Also check if a client with this phone exists
+            let clientQuery = supabase
+              .from("clients")
+              .select("id")
+              .eq("phone", contactPhone);
+            if (tenantId) clientQuery = clientQuery.eq("tenant_id", tenantId);
+
+            const { data: existingClient } = await clientQuery.maybeSingle();
+
+            if (!existingClient) {
+              const newLead: Record<string, any> = {
+                name: contactName || contactPhone,
+                phone: contactPhone,
+                source: "WhatsApp",
+                notes: `Primeira mensagem: ${content}`,
+                status: "novo",
+                pipeline_stage: "novo",
+              };
+              if (tenantId) newLead.tenant_id = tenantId;
+
+              const { data: createdLead, error: leadError } = await supabase
+                .from("leads")
+                .insert(newLead)
+                .select()
+                .single();
+
+              if (leadError) {
+                console.error("Auto-create lead error:", leadError);
+              } else {
+                console.log("Lead auto-created:", createdLead?.id, contactPhone);
+              }
+            }
+          }
+        }
+
         // Assign chat to a seller based on distribution if not yet assigned
         if (!chat.assigned_to) {
           const { data: assignments } = await supabase
@@ -200,6 +256,15 @@ Deno.serve(async (req) => {
               .from("whatsapp_chats")
               .update({ assigned_to: bestSeller })
               .eq("id", chat.id);
+
+            // Also assign the auto-created lead to the same seller
+            if (contactPhone) {
+              await supabase
+                .from("leads")
+                .update({ assigned_to: bestSeller })
+                .eq("phone", contactPhone)
+                .is("assigned_to", null);
+            }
           }
         }
 
