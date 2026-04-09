@@ -228,6 +228,23 @@ export function WhatsAppSettingsSection() {
     setResyncingMedia(false);
   };
 
+  const handleRegisterWebhook = async () => {
+    if (!tenantInstance) return;
+    try {
+      const result = await callWhatsAppQrcode({
+        action: 'check_webhook',
+        instance_id: tenantInstance.id,
+      });
+      if (result.error) throw new Error(result.error);
+      toast({
+        title: 'Webhook registrado com sucesso!',
+        description: 'Mensagens do WhatsApp agora serão recebidas automaticamente.',
+      });
+    } catch (err: any) {
+      toast({ title: 'Erro ao registrar webhook', description: err.message, variant: 'destructive' });
+    }
+  };
+
   if (isLoading) {
     return (
       <Card>
