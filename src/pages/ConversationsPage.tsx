@@ -536,8 +536,8 @@ function MessageArea({
             </Button>
           )}
           {contactPhone && (
-            <a href={`tel:+${contactPhone}`}>
-              <Button variant="ghost" size="icon" className="h-9 w-9" title="Ligar">
+            <a href={`https://wa.me/${contactPhone}`} target="_blank" rel="noopener noreferrer">
+              <Button variant="ghost" size="icon" className="h-9 w-9" title="Ligar via WhatsApp">
                 <Phone className="h-4 w-4" />
               </Button>
             </a>
