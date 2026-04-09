@@ -9,10 +9,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Search, Filter, Download, Upload, MessageCircle, Pencil, Trash2, Loader2 } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Plus, Search, Filter, Download, MessageCircle, Pencil, Trash2, Loader2, ArrowRightLeft, Users } from 'lucide-react';
 import { formatCurrency, formatDate, type LeadStatus, PIPELINE_STAGES, LEAD_SOURCES } from '@/types/crm';
 import { useLeads, useCreateLead, useUpdateLead, useDeleteLead, useProfiles } from '@/hooks/use-leads';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+import { useQueryClient } from '@tanstack/react-query';
 
 const statusConfig: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
   novo: { label: 'Novo', variant: 'default' },
@@ -30,12 +34,23 @@ export default function LeadsPage() {
   const createLead = useCreateLead();
   const updateLead = useUpdateLead();
   const deleteLead = useDeleteLead();
+  const queryClient = useQueryClient();
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [editLead, setEditLead] = useState<any>(null);
+
+  // Selection state
+  const [selectedLeads, setSelectedLeads] = useState<Set<string>>(new Set());
+
+  // Transfer dialogs
+  const [transferAllOpen, setTransferAllOpen] = useState(false);
+  const [transferSelectedOpen, setTransferSelectedOpen] = useState(false);
+  const [transferFromSeller, setTransferFromSeller] = useState('');
+  const [transferToSeller, setTransferToSeller] = useState('');
+  const [isTransferring, setIsTransferring] = useState(false);
 
   // Form state
   const [form, setForm] = useState({ name: '', phone: '', email: '', source: 'Website', value: '', notes: '', assigned_to: '' });
@@ -101,6 +116,79 @@ export default function LeadsPage() {
     a.click();
   };
 
+  // Toggle lead selection
+  const toggleSelect = (id: string) => {
+    setSelectedLeads(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedLeads.size === filtered.length) {
+      setSelectedLeads(new Set());
+    } else {
+      setSelectedLeads(new Set(filtered.map(l => l.id)));
+    }
+  };
+
+  // Transfer ALL leads from one seller to another
+  const handleTransferAll = async () => {
+    if (!transferFromSeller || !transferToSeller || transferFromSeller === transferToSeller) {
+      toast.error('Selecione vendedores diferentes');
+      return;
+    }
+    setIsTransferring(true);
+    try {
+      const leadsToTransfer = allLeads.filter(l => l.assigned_to === transferFromSeller);
+      if (leadsToTransfer.length === 0) {
+        toast.error('Este vendedor não possui leads');
+        setIsTransferring(false);
+        return;
+      }
+      const promises = leadsToTransfer.map(l =>
+        supabase.from('leads').update({ assigned_to: transferToSeller }).eq('id', l.id)
+      );
+      await Promise.all(promises);
+      queryClient.invalidateQueries({ queryKey: ['leads'] });
+      toast.success(`${leadsToTransfer.length} leads transferidos com sucesso!`);
+      setTransferAllOpen(false);
+      setTransferFromSeller('');
+      setTransferToSeller('');
+    } catch {
+      toast.error('Erro ao transferir leads');
+    }
+    setIsTransferring(false);
+  };
+
+  // Transfer selected leads to another seller
+  const handleTransferSelected = async () => {
+    if (!transferToSeller) {
+      toast.error('Selecione o vendedor de destino');
+      return;
+    }
+    if (selectedLeads.size === 0) {
+      toast.error('Nenhum lead selecionado');
+      return;
+    }
+    setIsTransferring(true);
+    try {
+      const promises = Array.from(selectedLeads).map(id =>
+        supabase.from('leads').update({ assigned_to: transferToSeller }).eq('id', id)
+      );
+      await Promise.all(promises);
+      queryClient.invalidateQueries({ queryKey: ['leads'] });
+      toast.success(`${selectedLeads.size} leads transferidos com sucesso!`);
+      setTransferSelectedOpen(false);
+      setTransferToSeller('');
+      setSelectedLeads(new Set());
+    } catch {
+      toast.error('Erro ao transferir leads');
+    }
+    setIsTransferring(false);
+  };
+
   if (isLoading) {
     return <div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   }
@@ -112,8 +200,90 @@ export default function LeadsPage() {
           <h1 className="text-2xl font-bold text-foreground">Leads</h1>
           <p className="text-muted-foreground text-sm">{filtered.length} leads encontrados</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <Button variant="outline" size="sm" onClick={handleExport}><Download className="h-4 w-4 mr-1" />Exportar</Button>
+
+          {/* Transfer ALL leads */}
+          <Dialog open={transferAllOpen} onOpenChange={setTransferAllOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" size="sm"><Users className="h-4 w-4 mr-1" />Transferir Todos</Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Transferir Todos os Leads de um Vendedor</DialogTitle>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
+                <div className="space-y-2">
+                  <Label>De (vendedor atual)</Label>
+                  <Select value={transferFromSeller} onValueChange={v => setTransferFromSeller(v)}>
+                    <SelectTrigger><SelectValue placeholder="Selecionar vendedor de origem" /></SelectTrigger>
+                    <SelectContent>
+                      {(profiles || []).map(p => {
+                        const count = allLeads.filter(l => l.assigned_to === p.id).length;
+                        return <SelectItem key={p.id} value={p.id}>{p.full_name} ({count} leads)</SelectItem>;
+                      })}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Para (novo vendedor)</Label>
+                  <Select value={transferToSeller} onValueChange={v => setTransferToSeller(v)}>
+                    <SelectTrigger><SelectValue placeholder="Selecionar vendedor de destino" /></SelectTrigger>
+                    <SelectContent>
+                      {(profiles || []).filter(p => p.id !== transferFromSeller).map(p => (
+                        <SelectItem key={p.id} value={p.id}>{p.full_name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {transferFromSeller && (
+                  <p className="text-sm text-muted-foreground">
+                    {allLeads.filter(l => l.assigned_to === transferFromSeller).length} leads serão transferidos.
+                  </p>
+                )}
+                <Button onClick={handleTransferAll} disabled={isTransferring || !transferFromSeller || !transferToSeller}>
+                  {isTransferring && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                  Transferir Todos
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          {/* Transfer SELECTED leads */}
+          <Dialog open={transferSelectedOpen} onOpenChange={v => { setTransferSelectedOpen(v); if (!v) setTransferToSeller(''); }}>
+            <DialogTrigger asChild>
+              <Button variant="outline" size="sm" disabled={selectedLeads.size === 0}>
+                <ArrowRightLeft className="h-4 w-4 mr-1" />
+                Transferir Selecionados{selectedLeads.size > 0 && ` (${selectedLeads.size})`}
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Transferir Leads Selecionados</DialogTitle>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
+                <p className="text-sm text-muted-foreground">
+                  {selectedLeads.size} lead{selectedLeads.size > 1 ? 's' : ''} selecionado{selectedLeads.size > 1 ? 's' : ''}.
+                </p>
+                <div className="space-y-2">
+                  <Label>Novo responsável</Label>
+                  <Select value={transferToSeller} onValueChange={v => setTransferToSeller(v)}>
+                    <SelectTrigger><SelectValue placeholder="Selecionar vendedor de destino" /></SelectTrigger>
+                    <SelectContent>
+                      {(profiles || []).map(p => (
+                        <SelectItem key={p.id} value={p.id}>{p.full_name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button onClick={handleTransferSelected} disabled={isTransferring || !transferToSeller}>
+                  {isTransferring && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                  Transferir {selectedLeads.size} Lead{selectedLeads.size > 1 ? 's' : ''}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+
           <Dialog open={isAddOpen} onOpenChange={(open) => { setIsAddOpen(open); if (!open) { setEditLead(null); resetForm(); } }}>
             <DialogTrigger asChild>
               <Button size="sm"><Plus className="h-4 w-4 mr-1" />Novo Lead</Button>
@@ -201,6 +371,12 @@ export default function LeadsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-[40px]">
+                    <Checkbox
+                      checked={filtered.length > 0 && selectedLeads.size === filtered.length}
+                      onCheckedChange={toggleSelectAll}
+                    />
+                  </TableHead>
                   <TableHead>Nome</TableHead>
                   <TableHead className="hidden md:table-cell">Telefone</TableHead>
                   <TableHead className="hidden lg:table-cell">Origem</TableHead>
@@ -213,11 +389,18 @@ export default function LeadsPage() {
               </TableHeader>
               <TableBody>
                 {filtered.length === 0 ? (
-                  <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Nenhum lead encontrado. Clique em "Novo Lead" para começar.</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Nenhum lead encontrado. Clique em "Novo Lead" para começar.</TableCell></TableRow>
                 ) : filtered.map((lead) => {
                   const sc = statusConfig[lead.status] || { label: lead.status, variant: 'outline' as const };
+                  const isSelected = selectedLeads.has(lead.id);
                   return (
-                    <TableRow key={lead.id} className="hover:bg-muted/30">
+                    <TableRow key={lead.id} className={`hover:bg-muted/30 ${isSelected ? 'bg-primary/5' : ''}`}>
+                      <TableCell>
+                        <Checkbox
+                          checked={isSelected}
+                          onCheckedChange={() => toggleSelect(lead.id)}
+                        />
+                      </TableCell>
                       <TableCell>
                         <div>
                           <p className="font-medium text-foreground">{lead.name}</p>
