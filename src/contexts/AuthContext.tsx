@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import type { User } from '@supabase/supabase-js';
 import type { Profile, UserRole } from '@/types/crm';
@@ -19,8 +19,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [role, setRole] = useState<UserRole | null>(null);
   const [loading, setLoading] = useState(true);
+  // Tracks the auth user ID that currently has its role loaded, to detect real user changes.
+  const loadedUserIdRef = useRef<string | null>(null);
 
   const clearAuthState = useCallback(() => {
+    loadedUserIdRef.current = null;
     setUser(null);
     setProfile(null);
     setRole(null);
@@ -39,9 +42,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (roleRes.error) {
         console.error('Error fetching role:', roleRes.error);
       }
+      if (!roleRes.data && !roleRes.error) {
+        console.warn('[AuthContext] No role row found for user_id:', userId,
+          '– check that user_roles table has a record with this user_id.');
+      }
 
       setProfile(profileRes.data ?? null);
       setRole((roleRes.data?.role as UserRole | undefined) ?? null);
+      loadedUserIdRef.current = userId;
     } catch (err) {
       console.error('Error fetching profile/role:', err);
     }
@@ -86,9 +94,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(currentUser);
 
       if (currentUser) {
-        setTimeout(() => {
-          if (mounted) fetchProfileAndRole(currentUser.id);
-        }, 0);
+        // Defer-fetch only when the role for this user hasn't been loaded yet.
+        // If signIn() or restoreValidatedSession() already fetched it, skip to
+        // avoid a second network call that could overwrite a valid role with null
+        // on transient failure.
+        if (loadedUserIdRef.current !== currentUser.id) {
+          // Show loading so ProtectedRoute doesn't render the sidebar with role=null.
+          setLoading(true);
+          setTimeout(() => {
+            if (!mounted) return;
+            // Re-check inside the callback: signIn() may have loaded it in the meantime.
+            if (loadedUserIdRef.current !== currentUser.id) {
+              fetchProfileAndRole(currentUser.id).finally(() => {
+                if (mounted) setLoading(false);
+              });
+            } else {
+              setLoading(false);
+            }
+          }, 0);
+        }
       } else {
         clearAuthState();
       }
@@ -117,6 +141,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
     if (!data.user) throw new Error('Não foi possível iniciar a sessão');
+
+    // Eagerly fetch profile and role right after authentication so the sidebar
+    // renders correctly before the onAuthStateChange deferred callback fires.
+    await fetchProfileAndRole(data.user.id);
   };
 
   const signOut = async () => {
