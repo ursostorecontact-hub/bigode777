@@ -72,15 +72,11 @@ export default function SettingsPage() {
   }, [settings]);
 
   const handleSaveCompany = () => {
-    if (settings) {
-      updateSettings.mutate({ id: settings.id, company_name: companyName });
-    }
+    updateSettings.mutate({ id: settings?.id, company_name: companyName });
   };
 
   const handleSaveIntegrations = () => {
-    if (settings) {
-      updateSettings.mutate({ id: settings.id, webhook_url: webhookUrl });
-    }
+    updateSettings.mutate({ id: settings?.id, webhook_url: webhookUrl });
   };
 
   const copyApiKey = () => {

@@ -209,6 +209,32 @@ export function useInteractions(leadId?: string, clientId?: string) {
   });
 }
 
+export function useCreateInteraction() {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async (interaction: {
+      type: string;
+      description: string;
+      outcome?: string;
+      created_by: string;
+      lead_id?: string;
+      client_id?: string;
+    }) => {
+      const { data, error } = await supabase.from('interactions').insert(interaction).select().single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (_data, variables) => {
+      qc.invalidateQueries({ queryKey: ['interactions', variables.lead_id, variables.client_id] });
+      toast({ title: 'Interação registrada!' });
+    },
+    onError: () => {
+      toast({ title: 'Erro ao registrar interação', variant: 'destructive' });
+    },
+  });
+}
+
 export function usePipelineStages() {
   return useQuery({
     queryKey: ['pipeline-stages'],
@@ -236,8 +262,8 @@ export function useSettings() {
   return useQuery({
     queryKey: ['settings'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('settings').select('*').limit(1).single();
-      if (error && error.code !== 'PGRST116') throw error;
+      const { data, error } = await supabase.from('settings').select('*').limit(1).maybeSingle();
+      if (error) throw error;
       return data;
     },
     enabled: !!user,
@@ -248,10 +274,17 @@ export function useUpdateSettings() {
   const qc = useQueryClient();
   const { toast } = useToast();
   return useMutation({
-    mutationFn: async ({ id, ...updates }: SettingsUpdatePayload) => {
+    mutationFn: async ({ id, ...updates }: Partial<SettingsUpdatePayload> & { id?: string }) => {
       const settingsUpdates: TablesUpdate<'settings'> = updates;
-      const { error } = await supabase.from('settings').update(settingsUpdates).eq('id', id);
-      if (error) throw error;
+      if (id) {
+        // Row exists – update it
+        const { error } = await supabase.from('settings').update(settingsUpdates).eq('id', id);
+        if (error) throw error;
+      } else {
+        // No settings row yet – insert one (tenant_id filled by DB DEFAULT)
+        const { error } = await supabase.from('settings').insert(settingsUpdates as never);
+        if (error) throw error;
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['settings'] });
