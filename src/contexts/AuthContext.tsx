@@ -108,6 +108,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch {
       // Ignore stale local-session cleanup failures before a fresh login.
     }
+    // Remove manually any remaining Supabase keys that signOut({ scope: 'local' })
+    // may not have cleared (e.g. corrupted entries left by a paused project).
+    Object.keys(localStorage).forEach(key => {
+      if (key.startsWith('sb-')) localStorage.removeItem(key);
+    });
 
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;

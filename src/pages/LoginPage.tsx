@@ -24,8 +24,10 @@ export default function LoginPage() {
     try {
       await signIn(email, password);
       toast({ title: 'Login realizado com sucesso!' });
-    } catch {
-      toast({ title: 'Erro ao fazer login', description: 'Verifique suas credenciais.', variant: 'destructive' });
+    } catch (err) {
+      console.error('Erro no login:', err);
+      const message = err instanceof Error ? err.message : 'Verifique suas credenciais.';
+      toast({ title: 'Erro ao fazer login', description: message, variant: 'destructive' });
     } finally {
       setIsLoading(false);
     }
