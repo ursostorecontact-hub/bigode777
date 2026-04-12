@@ -129,133 +129,251 @@ Deno.serve(async (req) => {
     console.log("Processing event:", event, "for instance:", instanceName);
 
     if (event === "messages.upsert") {
-      const msg = data;
-      const key = msg.key || {};
-      const remoteJid = key.remoteJid || msg.remoteJid || "";
-      const fromMe = key.fromMe ?? false;
-      const messageId = key.id || msg.id || "";
+      // Evolution API v2 sends data as a single object; some v1 versions send an array
+      const msgs = Array.isArray(data) ? data : [data];
+      for (const msg of msgs) {
+        const key = msg.key || {};
+        const remoteJid = key.remoteJid || msg.remoteJid || "";
+        const fromMe = key.fromMe ?? false;
+        const messageId = key.id || msg.id || "";
 
-      console.log("Processing message:", JSON.stringify({ remoteJid, fromMe, messageId }).slice(0, 200));
+        console.log("Processing message:", JSON.stringify({ remoteJid, fromMe, messageId }).slice(0, 200));
 
-      // Skip status broadcasts and groups
-      if (remoteJid === "status@broadcast" || remoteJid.includes("@g.us")) {
-        return new Response(JSON.stringify({ ok: true, skipped: "broadcast/group" }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
-      // Extract message content
-      let content = "";
-      let messageType = "text";
-      let mediaUrl: string | null = null;
-      let needsMediaDownload = false;
-
-      const message = msg.message || {};
-      if (message.conversation) {
-        content = message.conversation;
-      } else if (message.extendedTextMessage?.text) {
-        content = message.extendedTextMessage.text;
-      } else if (message.imageMessage) {
-        messageType = "image";
-        content = message.imageMessage.caption || "📷 Imagem";
-        needsMediaDownload = true;
-      } else if (message.audioMessage) {
-        messageType = "audio";
-        content = "🎵 Áudio";
-        needsMediaDownload = true;
-      } else if (message.videoMessage) {
-        messageType = "video";
-        content = message.videoMessage.caption || "🎥 Vídeo";
-        needsMediaDownload = true;
-      } else if (message.documentMessage) {
-        messageType = "document";
-        content = message.documentMessage.fileName || "📄 Documento";
-        needsMediaDownload = true;
-      } else if (message.stickerMessage) {
-        messageType = "sticker";
-        content = "🎨 Sticker";
-        needsMediaDownload = true;
-      } else {
-        content = "Mensagem não suportada";
-      }
-
-      // Download and store media in our bucket
-      if (needsMediaDownload && messageId) {
-        const storedUrl = await downloadAndStoreMedia(
-          supabase,
-          instance.evolution_url,
-          instance.evolution_api_key,
-          instanceName,
-          messageId,
-          messageType,
-        );
-        if (storedUrl) {
-          mediaUrl = storedUrl;
+        // Skip status broadcasts and groups
+        if (remoteJid === "status@broadcast" || remoteJid.includes("@g.us")) {
+          continue;
         }
-      }
 
-      const contactName = data.pushName || msg.pushName || remoteJid.split("@")[0];
-      const contactPhone = remoteJid.split("@")[0];
+        // Extract message content
+        let content = "";
+        let messageType = "text";
+        let mediaUrl: string | null = null;
+        let needsMediaDownload = false;
 
-      // Fetch profile picture
-      let profilePicUrl: string | null = null;
-      try {
-        const picRes = await fetch(
-          `${instance.evolution_url}/chat/fetchProfilePictureUrl/${instanceName}`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json", apikey: instance.evolution_api_key },
-            body: JSON.stringify({ number: contactPhone }),
+        const message = msg.message || {};
+        if (message.conversation) {
+          content = message.conversation;
+        } else if (message.extendedTextMessage?.text) {
+          content = message.extendedTextMessage.text;
+        } else if (message.imageMessage) {
+          messageType = "image";
+          content = message.imageMessage.caption || "📷 Imagem";
+          needsMediaDownload = true;
+        } else if (message.audioMessage) {
+          messageType = "audio";
+          content = "🎵 Áudio";
+          needsMediaDownload = true;
+        } else if (message.videoMessage) {
+          messageType = "video";
+          content = message.videoMessage.caption || "🎥 Vídeo";
+          needsMediaDownload = true;
+        } else if (message.documentMessage) {
+          messageType = "document";
+          content = message.documentMessage.fileName || "📄 Documento";
+          needsMediaDownload = true;
+        } else if (message.stickerMessage) {
+          messageType = "sticker";
+          content = "🎨 Sticker";
+          needsMediaDownload = true;
+        } else {
+          content = "Mensagem não suportada";
+        }
+
+        // Download and store media in our bucket
+        if (needsMediaDownload && messageId) {
+          const storedUrl = await downloadAndStoreMedia(
+            supabase,
+            instance.evolution_url,
+            instance.evolution_api_key,
+            instanceName,
+            messageId,
+            messageType,
+          );
+          if (storedUrl) {
+            mediaUrl = storedUrl;
           }
-        );
-        if (picRes.ok) {
-          const picData = await picRes.json();
-          profilePicUrl = picData?.profilePictureUrl || picData?.picture || null;
         }
-      } catch (e) {
-        console.log("Profile pic fetch failed:", e);
-      }
 
-      // Upsert chat
-      const upsertData: Record<string, any> = {
-        whatsapp_instance_id: instance.id,
-        remote_jid: remoteJid,
-        contact_phone: contactPhone,
-        last_message: content,
-        last_message_at: new Date().toISOString(),
-        unread_count: fromMe ? 0 : 1,
-      };
-      if (!fromMe) upsertData.contact_name = contactName;
-      if (profilePicUrl) upsertData.profile_picture_url = profilePicUrl;
+        const contactName = msg.pushName || remoteJid.split("@")[0];
+        const contactPhone = remoteJid.split("@")[0];
 
-      const { data: chat, error: chatError } = await supabase
-        .from("whatsapp_chats")
-        .upsert(upsertData, { onConflict: "whatsapp_instance_id,remote_jid" })
-        .select()
-        .single();
+        // Fetch profile picture
+        let profilePicUrl: string | null = null;
+        try {
+          const picRes = await fetch(
+            `${instance.evolution_url}/chat/fetchProfilePictureUrl/${instanceName}`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json", apikey: instance.evolution_api_key },
+              body: JSON.stringify({ number: contactPhone }),
+            }
+          );
+          if (picRes.ok) {
+            const picData = await picRes.json();
+            profilePicUrl = picData?.profilePictureUrl || picData?.picture || null;
+          }
+        } catch (e) {
+          console.log("Profile pic fetch failed:", e);
+        }
 
-      if (chatError) {
-        console.error("Chat upsert error:", chatError);
-        const { data: existingChat } = await supabase
+        // Upsert chat — do NOT include unread_count here to avoid resetting it on
+        // existing chats. The increment is done separately below.
+        const upsertData: Record<string, any> = {
+          whatsapp_instance_id: instance.id,
+          remote_jid: remoteJid,
+          contact_phone: contactPhone,
+          last_message: content,
+          last_message_at: new Date().toISOString(),
+        };
+        if (!fromMe) upsertData.contact_name = contactName;
+        if (profilePicUrl) upsertData.profile_picture_url = profilePicUrl;
+
+        const { data: chat, error: chatError } = await supabase
           .from("whatsapp_chats")
-          .select("*")
-          .eq("whatsapp_instance_id", instance.id)
-          .eq("remote_jid", remoteJid)
+          .upsert(upsertData, { onConflict: "whatsapp_instance_id,remote_jid" })
+          .select()
           .single();
 
-        if (existingChat) {
-          await supabase
+        if (chatError) {
+          console.error("Chat upsert error:", chatError);
+          const { data: existingChat } = await supabase
             .from("whatsapp_chats")
-            .update({
-              last_message: content,
-              last_message_at: new Date().toISOString(),
-              unread_count: fromMe ? 0 : existingChat.unread_count + 1,
-              ...(fromMe ? {} : { contact_name: contactName }),
-            })
-            .eq("id", existingChat.id);
+            .select("*")
+            .eq("whatsapp_instance_id", instance.id)
+            .eq("remote_jid", remoteJid)
+            .single();
 
+          if (existingChat) {
+            await supabase
+              .from("whatsapp_chats")
+              .update({
+                last_message: content,
+                last_message_at: new Date().toISOString(),
+                unread_count: fromMe ? 0 : (existingChat.unread_count || 0) + 1,
+                ...(fromMe ? {} : { contact_name: contactName }),
+              })
+              .eq("id", existingChat.id);
+
+            await supabase.from("whatsapp_messages").insert({
+              chat_id: existingChat.id,
+              from_me: fromMe,
+              remote_jid: remoteJid,
+              message_type: messageType,
+              content,
+              media_url: mediaUrl,
+              status: fromMe ? "sent" : "received",
+              evolution_message_id: messageId,
+            });
+          }
+        } else if (chat) {
+          // Increment unread counter for incoming messages (separate update to avoid
+          // resetting the counter via the upsert above)
+          if (!fromMe) {
+            await supabase
+              .from("whatsapp_chats")
+              .update({ unread_count: (chat.unread_count || 0) + 1 })
+              .eq("id", chat.id);
+          }
+
+          // Auto-create lead if new contact
+          if (!fromMe) {
+            const tenantId = instance.tenant_id || null;
+
+            let leadQuery = supabase
+              .from("leads")
+              .select("id")
+              .eq("phone", contactPhone);
+            if (tenantId) leadQuery = leadQuery.eq("tenant_id", tenantId);
+
+            const { data: existingLead } = await leadQuery.maybeSingle();
+
+            if (!existingLead) {
+              let clientQuery = supabase
+                .from("clients")
+                .select("id")
+                .eq("phone", contactPhone);
+              if (tenantId) clientQuery = clientQuery.eq("tenant_id", tenantId);
+
+              const { data: existingClient } = await clientQuery.maybeSingle();
+
+              if (!existingClient) {
+                const newLead: Record<string, any> = {
+                  name: contactName || contactPhone,
+                  phone: contactPhone,
+                  source: "WhatsApp",
+                  notes: `Primeira mensagem: ${content}`,
+                  status: "novo",
+                  pipeline_stage: "novo",
+                };
+                if (tenantId) newLead.tenant_id = tenantId;
+
+                const { data: createdLead, error: leadError } = await supabase
+                  .from("leads")
+                  .insert(newLead)
+                  .select()
+                  .single();
+
+                if (leadError) {
+                  console.error("Auto-create lead error:", leadError);
+                } else {
+                  console.log("Lead auto-created:", createdLead?.id, contactPhone);
+                }
+              }
+            }
+          }
+
+          // Assign chat to seller based on distribution
+          if (!chat.assigned_to) {
+            const { data: assignments } = await supabase
+              .from("whatsapp_assignments")
+              .select("*")
+              .eq("whatsapp_instance_id", instance.id)
+              .order("percentage", { ascending: false });
+
+            if (assignments && assignments.length > 0) {
+              const { data: chatCounts } = await supabase
+                .from("whatsapp_chats")
+                .select("assigned_to")
+                .eq("whatsapp_instance_id", instance.id)
+                .not("assigned_to", "is", null);
+
+              const counts: Record<string, number> = {};
+              chatCounts?.forEach((c) => {
+                if (c.assigned_to) counts[c.assigned_to] = (counts[c.assigned_to] || 0) + 1;
+              });
+
+              const total = Object.values(counts).reduce((s, v) => s + v, 0) || 1;
+
+              let bestSeller = assignments[0].user_id;
+              let bestGap = -Infinity;
+
+              for (const a of assignments) {
+                const actual = ((counts[a.user_id] || 0) / total) * 100;
+                const gap = a.percentage - actual;
+                if (gap > bestGap) {
+                  bestGap = gap;
+                  bestSeller = a.user_id;
+                }
+              }
+
+              await supabase
+                .from("whatsapp_chats")
+                .update({ assigned_to: bestSeller })
+                .eq("id", chat.id);
+
+              if (contactPhone) {
+                await supabase
+                  .from("leads")
+                  .update({ assigned_to: bestSeller })
+                  .eq("phone", contactPhone)
+                  .is("assigned_to", null);
+              }
+            }
+          }
+
+          // Insert message
           await supabase.from("whatsapp_messages").insert({
-            chat_id: existingChat.id,
+            chat_id: chat.id,
             from_me: fromMe,
             remote_jid: remoteJid,
             message_type: messageType,
@@ -265,122 +383,6 @@ Deno.serve(async (req) => {
             evolution_message_id: messageId,
           });
         }
-      } else if (chat) {
-        // If not fromMe, increment unread
-        if (!fromMe) {
-          await supabase
-            .from("whatsapp_chats")
-            .update({ unread_count: (chat.unread_count || 0) + 1 })
-            .eq("id", chat.id);
-        }
-
-        // Auto-create lead if new contact
-        if (!fromMe) {
-          const tenantId = instance.tenant_id || null;
-
-          let leadQuery = supabase
-            .from("leads")
-            .select("id")
-            .eq("phone", contactPhone);
-          if (tenantId) leadQuery = leadQuery.eq("tenant_id", tenantId);
-
-          const { data: existingLead } = await leadQuery.maybeSingle();
-
-          if (!existingLead) {
-            let clientQuery = supabase
-              .from("clients")
-              .select("id")
-              .eq("phone", contactPhone);
-            if (tenantId) clientQuery = clientQuery.eq("tenant_id", tenantId);
-
-            const { data: existingClient } = await clientQuery.maybeSingle();
-
-            if (!existingClient) {
-              const newLead: Record<string, any> = {
-                name: contactName || contactPhone,
-                phone: contactPhone,
-                source: "WhatsApp",
-                notes: `Primeira mensagem: ${content}`,
-                status: "novo",
-                pipeline_stage: "novo",
-              };
-              if (tenantId) newLead.tenant_id = tenantId;
-
-              const { data: createdLead, error: leadError } = await supabase
-                .from("leads")
-                .insert(newLead)
-                .select()
-                .single();
-
-              if (leadError) {
-                console.error("Auto-create lead error:", leadError);
-              } else {
-                console.log("Lead auto-created:", createdLead?.id, contactPhone);
-              }
-            }
-          }
-        }
-
-        // Assign chat to seller based on distribution
-        if (!chat.assigned_to) {
-          const { data: assignments } = await supabase
-            .from("whatsapp_assignments")
-            .select("*")
-            .eq("whatsapp_instance_id", instance.id)
-            .order("percentage", { ascending: false });
-
-          if (assignments && assignments.length > 0) {
-            const { data: chatCounts } = await supabase
-              .from("whatsapp_chats")
-              .select("assigned_to")
-              .eq("whatsapp_instance_id", instance.id)
-              .not("assigned_to", "is", null);
-
-            const counts: Record<string, number> = {};
-            chatCounts?.forEach((c) => {
-              if (c.assigned_to) counts[c.assigned_to] = (counts[c.assigned_to] || 0) + 1;
-            });
-
-            const total = Object.values(counts).reduce((s, v) => s + v, 0) || 1;
-
-            let bestSeller = assignments[0].user_id;
-            let bestGap = -Infinity;
-
-            for (const a of assignments) {
-              const actual = ((counts[a.user_id] || 0) / total) * 100;
-              const gap = a.percentage - actual;
-              if (gap > bestGap) {
-                bestGap = gap;
-                bestSeller = a.user_id;
-              }
-            }
-
-            await supabase
-              .from("whatsapp_chats")
-              .update({ assigned_to: bestSeller })
-              .eq("id", chat.id);
-
-            if (contactPhone) {
-              await supabase
-                .from("leads")
-                .update({ assigned_to: bestSeller })
-                .eq("phone", contactPhone)
-                .is("assigned_to", null);
-            }
-          }
-        }
-
-        // Insert message
-        await supabase.from("whatsapp_messages").insert({
-          chat_id: chat.id,
-          from_me: fromMe,
-          remote_jid: remoteJid,
-          message_type: messageType,
-          content,
-          media_url: mediaUrl,
-          status: fromMe ? "sent" : "received",
-          evolution_message_id: messageId,
-        });
       }
     } else if (event === "messages.update" || event === "messages.edited") {
       const updates = Array.isArray(data) ? data : [data];

@@ -553,7 +553,7 @@ function NewInstanceDialog({ onCreated }: { onCreated: () => void }) {
       const result = await callWhatsAppQrcode({
         action: 'create',
         name,
-        evolution_url: 'http://76.13.230.7:64644',
+        evolution_url: 'http://76.13.230.7:8080',
         evolution_api_key: 'bigodao77chave',
         instance_name: instanceName,
       });

@@ -65,16 +65,13 @@ Deno.serve(async (req) => {
       global: { headers: { Authorization: authHeader } },
     });
 
-    const token = authHeader.replace("Bearer ", "");
-    const { data: claimsData, error: claimsError } = await userClient.auth.getClaims(token);
-    if (claimsError || !claimsData?.claims?.sub) {
-      console.error("getClaims error:", claimsError);
+    const { data: { user }, error: userError } = await userClient.auth.getUser();
+    if (userError || !user) {
+      console.error("getUser error:", userError);
       return new Response(JSON.stringify({ error: "Não autorizado" }), {
         status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-
-    const user = { id: claimsData.claims.sub as string };
 
     const userId = user.id;
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
@@ -90,6 +87,14 @@ Deno.serve(async (req) => {
     const { action, instance_id, evolution_url, evolution_api_key, instance_name, name, phone, message } = await req.json();
 
     if (action === "create") {
+      // Look up the admin's tenant_id so the instance is scoped correctly
+      const { data: adminProfile } = await adminClient
+        .from("profiles")
+        .select("tenant_id")
+        .eq("id", userId)
+        .single();
+      const tenantId = adminProfile?.tenant_id || null;
+
       const createRes = await fetch(`${evolution_url}/instance/create`, {
         method: "POST",
         headers: { "Content-Type": "application/json", apikey: evolution_api_key },
@@ -145,15 +150,18 @@ Deno.serve(async (req) => {
         }
       }
 
+      const insertPayload: Record<string, unknown> = {
+        name: name || instance_name,
+        evolution_url,
+        evolution_api_key,
+        instance_name,
+        status: initialStatus,
+      };
+      if (tenantId) insertPayload.tenant_id = tenantId;
+
       const { data: saved, error: saveErr } = await adminClient
         .from("whatsapp_instances")
-        .insert({
-          name: name || instance_name,
-          evolution_url,
-          evolution_api_key,
-          instance_name,
-          status: initialStatus,
-        })
+        .insert(insertPayload)
         .select()
         .single();
 
