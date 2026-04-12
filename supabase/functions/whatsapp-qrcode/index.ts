@@ -87,6 +87,10 @@ Deno.serve(async (req) => {
     const { action, instance_id, evolution_url, evolution_api_key, instance_name, name, phone, message } = await req.json();
 
     if (action === "create") {
+      if (!evolution_url || !evolution_api_key || !instance_name) {
+        throw new Error("Campos obrigatórios: evolution_url, evolution_api_key, instance_name");
+      }
+
       // Look up the admin's tenant_id so the instance is scoped correctly
       const { data: adminProfile } = await adminClient
         .from("profiles")
@@ -95,82 +99,130 @@ Deno.serve(async (req) => {
         .single();
       const tenantId = adminProfile?.tenant_id || null;
 
-      const createRes = await fetch(`${evolution_url}/instance/create`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", apikey: evolution_api_key },
-        body: JSON.stringify({
-          instanceName: instance_name,
-          integration: "WHATSAPP-BAILEYS",
-          qrcode: true,
-          rejectCall: false,
-          alwaysOnline: true,
-        }),
-      });
+      // Helper: check if error text means "instance already exists"
+      const isAlreadyExistsError = (text: string, status: number) =>
+        status === 409 ||
+        /already (in use|exists)/i.test(text) ||
+        /instance.*exist/i.test(text) ||
+        /exist.*instance/i.test(text);
 
-      let createData: any = {};
-      if (!createRes.ok) {
-        const errText = await createRes.text();
-        const isAlreadyExists = errText.includes("already in use") || createRes.status === 409;
-        if (!isAlreadyExists) {
-          throw new Error(`Evolution API: ${errText}`);
-        }
-      } else {
-        createData = await createRes.json();
-      }
+      // ── Step 1: Create instance on Evolution API (best-effort with timeout) ──
+      let evolutionOk = false;
+      let evolutionWarning: string | null = null;
 
-      // Register webhook for this instance
-      await registerWebhook(evolution_url, evolution_api_key, instance_name, supabaseUrl);
+      try {
+        const createRes = await fetch(`${evolution_url}/instance/create`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", apikey: evolution_api_key },
+          body: JSON.stringify({
+            instanceName: instance_name,
+            integration: "WHATSAPP-BAILEYS",
+            qrcode: true,
+            rejectCall: false,
+            alwaysOnline: true,
+          }),
+          signal: AbortSignal.timeout(15000),
+        });
 
-      // Check if already connected
-      const stateRes = await fetch(
-        `${evolution_url}/instance/connectionState/${instance_name}`,
-        { headers: { apikey: evolution_api_key } }
-      );
-      let initialStatus = "connecting";
-      if (stateRes.ok) {
-        const stateData = await stateRes.json();
-        if (stateData?.instance?.state === "open") {
-          initialStatus = "connected";
-        }
-      } else {
-        await stateRes.text();
-      }
+        const responseText = await createRes.text();
+        console.log(`Evolution create status=${createRes.status}: ${responseText.slice(0, 300)}`);
 
-      let qrcode = createData.qrcode || null;
-      if (initialStatus !== "connected" && !qrcode) {
-        const qrRes = await fetch(
-          `${evolution_url}/instance/connect/${instance_name}`,
-          { headers: { apikey: evolution_api_key } }
-        );
-        if (qrRes.ok) {
-          const qrData = await qrRes.json();
-          qrcode = qrData.base64 || qrData.qrcode?.base64 || qrData;
+        if (createRes.ok || isAlreadyExistsError(responseText, createRes.status)) {
+          evolutionOk = true;
         } else {
-          await qrRes.text();
+          // Non-fatal: save to DB anyway so user can manage it, but warn
+          evolutionWarning = `Evolution API: ${responseText.slice(0, 200)}`;
+          console.error("Evolution create error (non-fatal):", evolutionWarning);
         }
+      } catch (err: any) {
+        // Network error or timeout — save to DB anyway so admin can manage later
+        evolutionWarning = `Não foi possível conectar à Evolution API: ${err.message}`;
+        console.error("Evolution API unreachable during create:", err.message);
       }
 
-      const insertPayload: Record<string, unknown> = {
-        name: name || instance_name,
-        evolution_url,
-        evolution_api_key,
-        instance_name,
-        status: initialStatus,
-      };
-      if (tenantId) insertPayload.tenant_id = tenantId;
+      // ── Step 2: Register webhook (best-effort) ──
+      if (evolutionOk) {
+        await registerWebhook(evolution_url, evolution_api_key, instance_name, supabaseUrl);
+      }
 
-      const { data: saved, error: saveErr } = await adminClient
+      // ── Step 3: Check connection state (best-effort) ──
+      let initialStatus = "connecting";
+      if (evolutionOk) {
+        try {
+          const stateRes = await fetch(
+            `${evolution_url}/instance/connectionState/${instance_name}`,
+            { headers: { apikey: evolution_api_key }, signal: AbortSignal.timeout(8000) }
+          );
+          if (stateRes.ok) {
+            const stateData = await stateRes.json();
+            if (stateData?.instance?.state === "open") initialStatus = "connected";
+          } else {
+            await stateRes.text();
+          }
+        } catch (_) { /* keep "connecting" */ }
+      }
+
+      // ── Step 4: Insert or update in DB ──
+      const instanceStatus = evolutionOk ? initialStatus : "disconnected";
+
+      // Check if already exists (handles case before migration adds unique constraint)
+      const { data: existing } = await adminClient
         .from("whatsapp_instances")
-        .insert(insertPayload)
-        .select()
-        .single();
+        .select("id")
+        .eq("instance_name", instance_name)
+        .maybeSingle();
 
-      if (saveErr) throw saveErr;
+      let saved: any;
+      let saveErr: any;
+
+      if (existing) {
+        // Update existing record
+        const updatePayload: Record<string, unknown> = {
+          name: name || instance_name,
+          evolution_url,
+          evolution_api_key,
+          status: instanceStatus,
+        };
+        if (tenantId) updatePayload.tenant_id = tenantId;
+
+        const res = await adminClient
+          .from("whatsapp_instances")
+          .update(updatePayload)
+          .eq("id", existing.id)
+          .select()
+          .single();
+        saved = res.data;
+        saveErr = res.error;
+      } else {
+        // Insert new record
+        const insertPayload: Record<string, unknown> = {
+          name: name || instance_name,
+          evolution_url,
+          evolution_api_key,
+          instance_name,
+          status: instanceStatus,
+        };
+        if (tenantId) insertPayload.tenant_id = tenantId;
+
+        const res = await adminClient
+          .from("whatsapp_instances")
+          .insert(insertPayload)
+          .select()
+          .single();
+        saved = res.data;
+        saveErr = res.error;
+      }
+
+      if (saveErr) {
+        console.error("DB save error:", saveErr);
+        throw new Error(`Erro ao salvar instância: ${saveErr.message}`);
+      }
 
       return new Response(JSON.stringify({
         instance: saved,
-        qrcode: qrcode || {},
+        qrcode: {},
         alreadyConnected: initialStatus === "connected",
+        warning: evolutionWarning,
       }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -185,58 +237,71 @@ Deno.serve(async (req) => {
 
       if (!inst) throw new Error("Instância não encontrada");
 
-      // Ensure instance exists on Evolution API
-      const checkRes = await fetch(
-        `${inst.evolution_url}/instance/connectionState/${inst.instance_name}`,
-        { headers: { apikey: inst.evolution_api_key } }
-      );
+      const isAlreadyExistsError = (text: string, status: number) =>
+        status === 409 || /already (in use|exists)/i.test(text) || /instance.*exist/i.test(text);
 
-      if (!checkRes.ok) {
-        // Recreate instance
-        const createRes = await fetch(`${inst.evolution_url}/instance/create`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", apikey: inst.evolution_api_key },
-          body: JSON.stringify({
-            instanceName: inst.instance_name,
-            integration: "WHATSAPP-BAILEYS",
-            qrcode: true,
-            alwaysOnline: true,
-          }),
-        });
-        if (!createRes.ok && createRes.status !== 409) {
-          const err = await createRes.text();
-          if (!err.includes("already in use")) {
-            throw new Error(`Evolution API: ${err}`);
+      // Ensure instance exists on Evolution API
+      let instanceReady = false;
+      try {
+        const checkRes = await fetch(
+          `${inst.evolution_url}/instance/connectionState/${inst.instance_name}`,
+          { headers: { apikey: inst.evolution_api_key }, signal: AbortSignal.timeout(10000) }
+        );
+
+        if (!checkRes.ok) {
+          // Instance not found — recreate
+          const createRes = await fetch(`${inst.evolution_url}/instance/create`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", apikey: inst.evolution_api_key },
+            body: JSON.stringify({
+              instanceName: inst.instance_name,
+              integration: "WHATSAPP-BAILEYS",
+              qrcode: true,
+              alwaysOnline: true,
+            }),
+            signal: AbortSignal.timeout(15000),
+          });
+          const createText = await createRes.text();
+          console.log(`Recreate status=${createRes.status}: ${createText.slice(0, 200)}`);
+          if (createRes.ok || isAlreadyExistsError(createText, createRes.status)) {
+            instanceReady = true;
+            await registerWebhook(inst.evolution_url, inst.evolution_api_key, inst.instance_name, supabaseUrl);
+          } else {
+            throw new Error(`Evolution API (recreate): ${createText.slice(0, 200)}`);
           }
         } else {
-          await createRes.text();
+          const stateData = await checkRes.json();
+          console.log("State check:", JSON.stringify(stateData).slice(0, 200));
+          if (stateData?.instance?.state === "open") {
+            await adminClient.from("whatsapp_instances").update({ status: "connected" }).eq("id", instance_id);
+            return new Response(JSON.stringify({ status: "connected", alreadyConnected: true }), {
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+          instanceReady = true;
         }
-        // Re-register webhook after recreate
-        await registerWebhook(inst.evolution_url, inst.evolution_api_key, inst.instance_name, supabaseUrl);
-      } else {
-        const stateData = await checkRes.json();
-        // If already connected, just return
-        if (stateData?.instance?.state === "open") {
-          await adminClient.from("whatsapp_instances").update({ status: "connected" }).eq("id", instance_id);
-          return new Response(JSON.stringify({ status: "connected", alreadyConnected: true }), {
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
-        }
+      } catch (err: any) {
+        if (err.message.startsWith("Evolution API")) throw err;
+        throw new Error(`Não foi possível conectar à Evolution API: ${err.message}`);
       }
+
+      if (!instanceReady) throw new Error("Instância não está pronta na Evolution API");
 
       const qrRes = await fetch(
         `${inst.evolution_url}/instance/connect/${inst.instance_name}`,
-        { headers: { apikey: inst.evolution_api_key } }
+        { headers: { apikey: inst.evolution_api_key }, signal: AbortSignal.timeout(15000) }
       );
 
       if (!qrRes.ok) {
         const err = await qrRes.text();
-        throw new Error(`Evolution API: ${err}`);
+        throw new Error(`Evolution API (QR): ${err.slice(0, 200)}`);
       }
 
       const qrData = await qrRes.json();
+      console.log("QR data keys:", Object.keys(qrData));
+      // Evolution API v2 returns { base64: "data:image/png;base64,..." } or { code: "..." }
       const base64 = qrData.base64 || qrData.qrcode?.base64 || null;
-      return new Response(JSON.stringify({ 
+      return new Response(JSON.stringify({
         qrcode: base64 ? { base64 } : qrData,
         pairingCode: qrData.pairingCode || null,
       }), {
