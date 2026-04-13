@@ -230,6 +230,7 @@ Deno.serve(async (req) => {
           contact_phone: contactPhone,
           last_message: content,
           last_message_at: new Date().toISOString(),
+          tenant_id: instance.tenant_id,
         };
         if (!fromMe) upsertData.contact_name = contactName;
         if (profilePicUrl) upsertData.profile_picture_url = profilePicUrl;
@@ -269,6 +270,7 @@ Deno.serve(async (req) => {
               media_url: mediaUrl,
               status: fromMe ? "sent" : "received",
               evolution_message_id: messageId,
+              tenant_id: instance.tenant_id,
             });
           }
         } else if (chat) {
@@ -387,6 +389,7 @@ Deno.serve(async (req) => {
             media_url: mediaUrl,
             status: fromMe ? "sent" : "received",
             evolution_message_id: messageId,
+            tenant_id: instance.tenant_id,
           });
         }
       }

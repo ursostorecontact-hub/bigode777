@@ -116,7 +116,7 @@ Deno.serve(async (req) => {
     for (let i = 0; i < events.length; i += 1000) {
       const batch = events.slice(i, i + 1000);
       const fbRes = await fetch(
-        `https://graph.facebook.com/v19.0/${pixel_id}/events`,
+        `https://graph.facebook.com/v21.0/${pixel_id}/events`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -145,7 +145,7 @@ Deno.serve(async (req) => {
       JSON.stringify({ ok: true, sent_count: totalSent }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-  } catch (err) {
+  } catch (err: any) {
     return new Response(
       JSON.stringify({ error: err.message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
