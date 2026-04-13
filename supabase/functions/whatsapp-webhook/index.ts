@@ -113,11 +113,19 @@ Deno.serve(async (req) => {
     }
 
     // Find the instance in our DB (with evolution credentials)
-    const { data: instance } = await supabase
+    // Select all URL/key column variants since the table schema evolved over time
+    const { data: instanceRow } = await supabase
       .from("whatsapp_instances")
-      .select("id, evolution_url, evolution_api_key, tenant_id")
+      .select("id, evolution_url, evolution_api_url, api_url, evolution_api_key, api_key, tenant_id")
       .eq("instance_name", instanceName)
       .single();
+
+    // Normalize credentials regardless of which column was populated
+    const instance = instanceRow ? {
+      ...instanceRow,
+      evolution_url: instanceRow.evolution_url || instanceRow.api_url || instanceRow.evolution_api_url || "",
+      evolution_api_key: instanceRow.evolution_api_key || instanceRow.api_key || "",
+    } : null;
 
     if (!instance) {
       console.log("Instance not found:", instanceName);

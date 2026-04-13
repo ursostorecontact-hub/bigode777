@@ -13,7 +13,7 @@ import { useWhatsAppInstances } from '@/hooks/use-integrations';
 import { useTenant } from '@/contexts/TenantContext';
 import { useToast } from '@/hooks/use-toast';
 
-const EVOLUTION_URL = 'http://76.13.230.7:8080';
+const EVOLUTION_URL = 'https://api.flashcrms.com.br';
 const EVOLUTION_API_KEY = 'bigodao77chave';
 
 async function callWhatsAppQrcode(body: Record<string, unknown>) {
