@@ -5,31 +5,29 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-// Normalize credentials from DB row — table has both evolution_url/api_url variants
+// Normalize credentials from DB row
 function getCredentials(inst: Record<string, any>) {
-  const url = inst.evolution_url || inst.api_url || inst.evolution_api_url || "";
-  const key = inst.evolution_api_key || inst.api_key || "";
+  const url = inst.evolution_url || "";
+  const key = inst.evolution_api_key || "";
   return { url, key };
 }
 
-// Build insert/update payload using all URL/key column names the table may have
+// Build insert/update payload matching the actual whatsapp_instances schema
 function buildInstancePayload(params: {
   evolution_url: string;
   evolution_api_key: string;
   instance_name?: string;
+  name?: string;
   status: string;
   tenant_id?: string | null;
 }) {
   const payload: Record<string, unknown> = {
-    // Write to every URL/key column so regardless of which one has NOT NULL it works
     evolution_url: params.evolution_url,
-    evolution_api_url: params.evolution_url,
-    api_url: params.evolution_url,
     evolution_api_key: params.evolution_api_key,
-    api_key: params.evolution_api_key,
     status: params.status,
   };
   if (params.instance_name !== undefined) payload.instance_name = params.instance_name;
+  if (params.name !== undefined) payload.name = params.name;
   if (params.tenant_id) payload.tenant_id = params.tenant_id;
   return payload;
 }
@@ -123,7 +121,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { action, instance_id, evolution_url, evolution_api_key, instance_name, name: _name, phone, message } = await req.json();
+    const { action, instance_id, evolution_url, evolution_api_key, instance_name, name, phone, message } = await req.json();
 
     // ─────────────────────────────────────────────────────────────────────────
     // CREATE
@@ -196,12 +194,12 @@ Deno.serve(async (req) => {
       }
 
       // ── Step 4: Save to DB (insert or update) ──
-      // NOTE: table does NOT have a "name" column — use only real columns
       const instanceStatus = evolutionOk ? initialStatus : "disconnected";
       const payload = buildInstancePayload({
         evolution_url,
         evolution_api_key,
         instance_name,
+        name: name || instance_name,
         status: instanceStatus,
         tenant_id: tenantId,
       });

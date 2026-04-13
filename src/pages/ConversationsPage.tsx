@@ -25,7 +25,6 @@ import {
   useMarkChatRead,
   useDeleteWhatsAppMessage,
 } from '@/hooks/use-whatsapp-chat';
-import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useLabels, useLabelAssignments, useAssignLabel, useUnassignLabel } from '@/hooks/use-labels';
@@ -384,7 +383,6 @@ function MessageArea({
   const markRead = useMarkChatRead();
   const deleteMessage = useDeleteWhatsAppMessage();
   const { toast } = useToast();
-  const { role } = useAuth();
   const [text, setText] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);

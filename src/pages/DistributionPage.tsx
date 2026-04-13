@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -30,7 +30,7 @@ export default function DistributionPage() {
   const unassigned = allLeads.filter(l => !l.assigned_to && l.status !== 'ganho' && l.status !== 'perdido');
 
   // Initialize percentages when profiles load
-  useMemo(() => {
+  useEffect(() => {
     if (allProfiles.length > 0 && Object.keys(percentages).length === 0) {
       const equal = Math.floor(100 / allProfiles.length);
       const remainder = 100 - equal * allProfiles.length;
@@ -40,7 +40,8 @@ export default function DistributionPage() {
       });
       setPercentages(init);
     }
-  }, [allProfiles]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allProfiles.length]);
 
   const totalPercentage = Object.values(percentages).reduce((s, v) => s + v, 0);
 

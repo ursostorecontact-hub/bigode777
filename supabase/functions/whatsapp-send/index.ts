@@ -75,9 +75,8 @@ Deno.serve(async (req) => {
       }
 
       const instance = chat.whatsapp_instances;
-      // Normalize credentials — table has both evolution_url/api_url column variants
-      const instanceUrl: string = instance.evolution_url || instance.api_url || instance.evolution_api_url || "";
-      const instanceKey: string = instance.evolution_api_key || instance.api_key || "";
+      const instanceUrl: string = instance.evolution_url || "";
+      const instanceKey: string = instance.evolution_api_key || "";
       const number = chat.remote_jid.replace("@s.whatsapp.net", "");
       let evoData: any = {};
       let messageId: string | null = null;
@@ -236,8 +235,8 @@ Deno.serve(async (req) => {
         });
       }
 
-      const instUrl = instance.evolution_url || instance.api_url || instance.evolution_api_url || "";
-      const instKey = instance.evolution_api_key || instance.api_key || "";
+      const instUrl = instance.evolution_url || "";
+      const instKey = instance.evolution_api_key || "";
       const evoRes = await fetch(
         `${instUrl}/chat/findChats/${instance.instance_name}`,
         { headers: { apikey: instKey } }
@@ -315,8 +314,8 @@ Deno.serve(async (req) => {
           .single();
 
         if (instance) {
-          const delInstUrl = instance.evolution_url || instance.api_url || instance.evolution_api_url || "";
-          const delInstKey = instance.evolution_api_key || instance.api_key || "";
+          const delInstUrl = instance.evolution_url || "";
+          const delInstKey = instance.evolution_api_key || "";
           try {
             await fetch(
               `${delInstUrl}/chat/deleteMessageForEveryone/${instance.instance_name}`,
