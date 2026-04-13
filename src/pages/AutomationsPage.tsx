@@ -57,7 +57,6 @@ export default function AutomationsPage() {
     setMessageTemplate('');
     setInactiveDays('3');
     setTwilioFrom('');
-    setTwilioFrom('');
   };
 
   const handleCreate = () => {
@@ -202,7 +201,7 @@ export default function AutomationsPage() {
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="whatsapp">WhatsApp (Evolution API)</SelectItem>
-                  <SelectItem value="whatsapp">WhatsApp (Evolution API)</SelectItem>
+                  <SelectItem value="webhook">Webhook (n8n)</SelectItem>
                   <SelectItem value="sms">SMS (Twilio)</SelectItem>
                 </SelectContent>
               </Select>

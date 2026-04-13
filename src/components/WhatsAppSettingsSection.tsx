@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import {
   QrCode, Smartphone, Loader2, CheckCircle2, XCircle,
-  RefreshCw, Wifi, WifiOff, Phone, Trash2, MessageSquare, Image as ImageIcon,
+  Wifi, WifiOff, Phone, Trash2, MessageSquare, RefreshCw,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useWhatsAppInstances } from '@/hooks/use-integrations';
@@ -33,7 +33,6 @@ async function callWhatsAppQrcode(body: Record<string, unknown>) {
 }
 
 export function WhatsAppSettingsSection() {
-  const [resyncingMedia, setResyncingMedia] = useState(false);
   const { toast } = useToast();
   const { tenant } = useTenant();
   const { data: instances, isLoading, refetch } = useWhatsAppInstances();
@@ -53,8 +52,9 @@ export function WhatsAppSettingsSection() {
   const [pairingCode, setPairingCode] = useState<string | null>(null);
   const [pairingPhone, setPairingPhone] = useState('');
   const [pairingLoading, setPairingLoading] = useState(false);
-  const [syncing, setSyncing] = useState(false);
   const qrInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Track whether we have already auto-registered the webhook this session
+  const webhookRegisteredRef = useRef(false);
 
   const isConnected = status === 'connected';
 
@@ -77,12 +77,22 @@ export function WhatsAppSettingsSection() {
   useEffect(() => {
     if (!tenantInstance) return;
     checkStatus();
-    const iv = setInterval(checkStatus, 20000);
+    const iv = setInterval(checkStatus, 30000);
     return () => {
       clearInterval(iv);
       if (qrInterval.current) clearInterval(qrInterval.current);
     };
   }, [checkStatus, tenantInstance]);
+
+  // Auto-register webhook once when instance is detected as connected
+  useEffect(() => {
+    if (isConnected && tenantInstance && !webhookRegisteredRef.current) {
+      webhookRegisteredRef.current = true;
+      callWhatsAppQrcode({ action: 'check_webhook', instance_id: tenantInstance.id })
+        .then(() => console.log('Webhook auto-registered'))
+        .catch(() => {});
+    }
+  }, [isConnected, tenantInstance]);
 
   const handleCreate = async () => {
     if (!tenant) return;
@@ -90,7 +100,6 @@ export function WhatsAppSettingsSection() {
     try {
       const result = await callWhatsAppQrcode({
         action: 'create',
-        name: `WhatsApp ${tenant.name}`,
         evolution_url: EVOLUTION_URL,
         evolution_api_key: EVOLUTION_API_KEY,
         instance_name: tenant.slug,
@@ -174,60 +183,6 @@ export function WhatsAppSettingsSection() {
     setDeleting(false);
   };
 
-  const handleSyncMessages = async () => {
-    if (!tenantInstance) return;
-    setSyncing(true);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/whatsapp-sync`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${session?.access_token}`,
-          },
-          body: JSON.stringify({ instance_id: tenantInstance.id }),
-        },
-      );
-      const result = await res.json();
-      if (result.error) throw new Error(result.error);
-      toast({
-        title: 'Sincronização concluída',
-        description: `${result.synced_chats || 0} conversas e ${result.synced_messages || 0} mensagens importadas`,
-      });
-    } catch (err: any) {
-      toast({ title: 'Erro ao sincronizar', description: err.message, variant: 'destructive' });
-    }
-    setSyncing(false);
-  };
-
-  const handleResyncMedia = async () => {
-    setResyncingMedia(true);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/whatsapp-resync-media`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${session?.access_token}`,
-          },
-        },
-      );
-      const result = await res.json();
-      if (result.error) throw new Error(result.error);
-      toast({
-        title: 'Mídias corrigidas',
-        description: `${result.fixed || 0} mídias recuperadas de ${result.total || 0} pendentes`,
-      });
-    } catch (err: any) {
-      toast({ title: 'Erro', description: err.message, variant: 'destructive' });
-    }
-    setResyncingMedia(false);
-  };
-
   const handleRegisterWebhook = async () => {
     if (!tenantInstance) return;
     try {
@@ -237,8 +192,8 @@ export function WhatsAppSettingsSection() {
       });
       if (result.error) throw new Error(result.error);
       toast({
-        title: 'Webhook registrado com sucesso!',
-        description: 'Mensagens do WhatsApp agora serão recebidas automaticamente.',
+        title: 'Webhook registrado!',
+        description: 'Mensagens do WhatsApp serão recebidas automaticamente.',
       });
     } catch (err: any) {
       toast({ title: 'Erro ao registrar webhook', description: err.message, variant: 'destructive' });
@@ -313,20 +268,10 @@ export function WhatsAppSettingsSection() {
           </div>
           <div className="flex items-center gap-1.5">
             {isConnected && (
-              <>
-                <Button variant="outline" size="sm" onClick={handleSyncMessages} disabled={syncing} className="gap-1.5 h-8 text-xs">
-                  {syncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-                  Importar Mensagens
-                </Button>
-                <Button variant="outline" size="sm" onClick={handleResyncMedia} disabled={resyncingMedia} className="gap-1.5 h-8 text-xs">
-                  {resyncingMedia ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ImageIcon className="h-3.5 w-3.5" />}
-                  Corrigir Mídias
-                </Button>
-                <Button variant="outline" size="sm" onClick={handleRegisterWebhook} className="gap-1.5 h-8 text-xs">
-                  <RefreshCw className="h-3.5 w-3.5" />
-                  Ativar Recebimento
-                </Button>
-              </>
+              <Button variant="outline" size="sm" onClick={handleRegisterWebhook} className="gap-1.5 h-8 text-xs">
+                <RefreshCw className="h-3.5 w-3.5" />
+                Verificar Webhook
+              </Button>
             )}
             <Button variant="ghost" size="icon" onClick={handleDelete} disabled={deleting} className="text-muted-foreground hover:text-destructive h-8 w-8">
               {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}

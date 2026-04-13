@@ -371,7 +371,8 @@ Deno.serve(async (req) => {
         await adminClient.from("whatsapp_instances").update({ status: newStatus }).eq("id", instance_id);
       }
 
-      if (newStatus === "connected" && inst.status !== "connected") {
+      // Always re-register webhook when connected (idempotent — ensures it's never lost)
+      if (newStatus === "connected") {
         await registerWebhook(evoUrl, evoKey, inst.instance_name, supabaseUrl);
       }
 

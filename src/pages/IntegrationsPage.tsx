@@ -33,7 +33,7 @@ function WhatsAppSection() {
     }
     const result = await createInstance.mutateAsync({
       name,
-      evolution_url: 'http://76.13.230.7:64644',
+      evolution_url: 'https://api.flashcrms.com.br',
       evolution_api_key: 'bigodao77chave',
       instance_name: instanceName,
     });

@@ -75,6 +75,9 @@ Deno.serve(async (req) => {
       }
 
       const instance = chat.whatsapp_instances;
+      // Normalize credentials — table has both evolution_url/api_url column variants
+      const instanceUrl: string = instance.evolution_url || instance.api_url || instance.evolution_api_url || "";
+      const instanceKey: string = instance.evolution_api_key || instance.api_key || "";
       const number = chat.remote_jid.replace("@s.whatsapp.net", "");
       let evoData: any = {};
       let messageId: string | null = null;
@@ -83,12 +86,12 @@ Deno.serve(async (req) => {
 
       if (actualType === "text") {
         // Send text message
-        const evoUrl = `${instance.evolution_url}/message/sendText/${instance.instance_name}`;
+        const evoUrl = `${instanceUrl}/message/sendText/${instance.instance_name}`;
         const evoRes = await fetch(evoUrl, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            apikey: instance.evolution_api_key,
+            apikey: instanceKey,
           },
           body: JSON.stringify({ number, text: content }),
         });
@@ -117,12 +120,12 @@ Deno.serve(async (req) => {
         savedMediaUrl = publicUrlData?.publicUrl || null;
 
         // Send audio via Evolution API
-        const evoUrl = `${instance.evolution_url}/message/sendWhatsAppAudio/${instance.instance_name}`;
+        const evoUrl = `${instanceUrl}/message/sendWhatsAppAudio/${instance.instance_name}`;
         const evoRes = await fetch(evoUrl, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            apikey: instance.evolution_api_key,
+            apikey: instanceKey,
           },
           body: JSON.stringify({
             number,
@@ -155,12 +158,12 @@ Deno.serve(async (req) => {
         savedMediaUrl = publicUrlData?.publicUrl || null;
 
         // Send media via Evolution API
-        const evoUrl = `${instance.evolution_url}/message/sendMedia/${instance.instance_name}`;
+        const evoUrl = `${instanceUrl}/message/sendMedia/${instance.instance_name}`;
         const evoRes = await fetch(evoUrl, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            apikey: instance.evolution_api_key,
+            apikey: instanceKey,
           },
           body: JSON.stringify({
             number,
@@ -233,9 +236,11 @@ Deno.serve(async (req) => {
         });
       }
 
+      const instUrl = instance.evolution_url || instance.api_url || instance.evolution_api_url || "";
+      const instKey = instance.evolution_api_key || instance.api_key || "";
       const evoRes = await fetch(
-        `${instance.evolution_url}/chat/findChats/${instance.instance_name}`,
-        { headers: { apikey: instance.evolution_api_key } }
+        `${instUrl}/chat/findChats/${instance.instance_name}`,
+        { headers: { apikey: instKey } }
       );
       const chats = await evoRes.json();
 
@@ -310,14 +315,16 @@ Deno.serve(async (req) => {
           .single();
 
         if (instance) {
+          const delInstUrl = instance.evolution_url || instance.api_url || instance.evolution_api_url || "";
+          const delInstKey = instance.evolution_api_key || instance.api_key || "";
           try {
             await fetch(
-              `${instance.evolution_url}/chat/deleteMessageForEveryone/${instance.instance_name}`,
+              `${delInstUrl}/chat/deleteMessageForEveryone/${instance.instance_name}`,
               {
                 method: "DELETE",
                 headers: {
                   "Content-Type": "application/json",
-                  apikey: instance.evolution_api_key,
+                  apikey: delInstKey,
                 },
                 body: JSON.stringify({
                   id: msg.evolution_message_id,

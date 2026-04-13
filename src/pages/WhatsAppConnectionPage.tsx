@@ -139,7 +139,6 @@ function InstanceCard({ instance, profiles, onRefresh }: {
   const [pairingCode, setPairingCode] = useState<string | null>(null);
   const [pairingPhone, setPairingPhone] = useState('');
   const [pairingLoading, setPairingLoading] = useState(false);
-  const [syncing, setSyncing] = useState(false);
   const qrInterval = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const isConnected = status === 'connected';
@@ -272,33 +271,6 @@ function InstanceCard({ instance, profiles, onRefresh }: {
     setDeleting(false);
   };
 
-  const handleSyncMessages = async () => {
-    setSyncing(true);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/whatsapp-sync`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${session?.access_token}`,
-          },
-          body: JSON.stringify({ instance_id: instance.id }),
-        },
-      );
-      const result = await res.json();
-      if (result.error) throw new Error(result.error);
-      toast({
-        title: 'Sincronização concluída',
-        description: `${result.synced_chats || 0} conversas e ${result.synced_messages || 0} mensagens importadas`,
-      });
-    } catch (err: any) {
-      toast({ title: 'Erro ao sincronizar', description: err.message, variant: 'destructive' });
-    }
-    setSyncing(false);
-  };
-
   const totalPct = Object.values(localAssignments).reduce((s, v) => s + v, 0);
   const assignedProfiles = profiles.filter((p) => p.id in localAssignments);
   const unassignedProfiles = profiles.filter((p) => !(p.id in localAssignments));
@@ -337,12 +309,6 @@ function InstanceCard({ instance, profiles, onRefresh }: {
             </div>
           </div>
           <div className="flex items-center gap-1.5">
-            {isConnected && (
-              <Button variant="outline" size="sm" onClick={handleSyncMessages} disabled={syncing} className="gap-1.5 h-8 text-xs">
-                {syncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-                Importar Mensagens
-              </Button>
-            )}
             {!isConnected && (
               <Button variant="outline" size="sm" onClick={handleReconnect} disabled={reconnecting} className="gap-1.5 h-8 text-xs">
                 {reconnecting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wifi className="h-3.5 w-3.5" />}
