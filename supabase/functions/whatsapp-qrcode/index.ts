@@ -12,7 +12,8 @@ function getCredentials(inst: Record<string, any>) {
   return { url, key };
 }
 
-// Build insert/update payload matching the actual whatsapp_instances schema
+// Build insert/update payload matching the actual whatsapp_instances schema.
+// 'name' is optional — falls back to instance_name if omitted.
 function buildInstancePayload(params: {
   evolution_url: string;
   evolution_api_key: string;
@@ -25,9 +26,11 @@ function buildInstancePayload(params: {
     evolution_url: params.evolution_url,
     evolution_api_key: params.evolution_api_key,
     status: params.status,
+    // Always include name, defaulting to instance_name so the column is never
+    // omitted from INSERT (a missing name on an existing NOT NULL column causes errors).
+    name: params.name || params.instance_name || "",
   };
   if (params.instance_name !== undefined) payload.instance_name = params.instance_name;
-  if (params.name !== undefined) payload.name = params.name;
   if (params.tenant_id) payload.tenant_id = params.tenant_id;
   return payload;
 }

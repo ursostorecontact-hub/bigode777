@@ -250,7 +250,7 @@ export default function DistributionPage() {
                       const inst = (whatsappInstances || []).find(i => i.id === ua.whatsapp_instance_id);
                       return inst ? (
                         <p key={ua.id} className="text-[10px] text-muted-foreground flex items-center gap-1">
-                          📱 {inst.name} ({ua.percentage}%)
+                          📱 {inst.name || inst.instance_name} ({ua.percentage}%)
                         </p>
                       ) : null;
                     })}

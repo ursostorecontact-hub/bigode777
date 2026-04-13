@@ -112,7 +112,7 @@ function WhatsAppSection() {
                     <MessageSquare className="h-4 w-4 text-primary" />
                   </div>
                   <div>
-                    <p className="font-medium text-sm">{inst.name}</p>
+                    <p className="font-medium text-sm">{inst.name || inst.instance_name}</p>
                     <p className="text-xs text-muted-foreground">{inst.instance_name}</p>
                   </div>
                   <Badge variant={inst.status === 'connected' ? 'default' : 'secondary'} className="text-xs">
@@ -126,7 +126,7 @@ function WhatsAppSection() {
                   <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleCheckStatus(inst.id)} title="Verificar status">
                     <RefreshCw className="h-4 w-4" />
                   </Button>
-                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleDelete(inst.id, inst.name)} title="Remover">
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleDelete(inst.id, inst.name || inst.instance_name)} title="Remover">
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>

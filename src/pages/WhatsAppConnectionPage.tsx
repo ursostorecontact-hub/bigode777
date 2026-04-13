@@ -260,7 +260,7 @@ function InstanceCard({ instance, profiles, onRefresh }: {
   };
 
   const handleDelete = async () => {
-    if (!confirm(`Excluir instância "${instance.name}"?`)) return;
+    if (!confirm(`Excluir instância "${instance.name || instance.instance_name}"?`)) return;
     setDeleting(true);
     try {
       await callWhatsAppQrcode({ action: 'delete', instance_id: instance.id });
@@ -299,7 +299,7 @@ function InstanceCard({ instance, profiles, onRefresh }: {
                 : <WifiOff className="h-5 w-5 text-muted-foreground" />}
             </div>
             <div>
-              <h3 className="font-bold text-foreground text-base">{instance.name}</h3>
+              <h3 className="font-bold text-foreground text-base">{instance.name || instance.instance_name}</h3>
               <div className="flex items-center gap-2 mt-0.5">
                 <Badge variant={isConnected ? 'default' : 'secondary'} className="gap-1 text-[10px] h-5">
                   {isConnected ? <><CheckCircle2 className="h-2.5 w-2.5" />Online</> : <><XCircle className="h-2.5 w-2.5" />Offline</>}
@@ -521,6 +521,7 @@ function NewInstanceDialog({ onCreated }: { onCreated: () => void }) {
         evolution_url: 'https://api.flashcrms.com.br',
         evolution_api_key: 'bigodao77chave',
         instance_name: instanceName,
+        name,
       });
       if (result.error) throw new Error(result.error);
       toast({ title: 'Instância criada com sucesso!' });
