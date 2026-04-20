@@ -5,7 +5,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const EVOLUTION_URL = "http://76.13.230.7:8080";
+const EVOLUTION_URL = "https://api.flashcrms.com.br";
 const EVOLUTION_API_KEY = "bigodao77chave";
 const INSTANCE_NAME = "bigodao77";
 const STALE_INSTANCE_MAX_AGE_MS = 10 * 60 * 1000;
