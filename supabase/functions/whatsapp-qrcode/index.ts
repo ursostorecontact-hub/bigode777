@@ -25,6 +25,12 @@ function buildInstancePayload(params: {
   const payload: Record<string, unknown> = {
     evolution_url: params.evolution_url,
     evolution_api_key: params.evolution_api_key,
+    // api_url and api_key mirror evolution_url/evolution_api_key to satisfy
+    // the NOT NULL constraint on api_url that exists in production.
+    api_url: params.evolution_url,
+    api_key: params.evolution_api_key,
+    // evolution_api_url is a denormalized copy used by some legacy code paths.
+    evolution_api_url: params.evolution_url,
     status: params.status,
     // Always include name, defaulting to instance_name so the column is never
     // omitted from INSERT (a missing name on an existing NOT NULL column causes errors).
