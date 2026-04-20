@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import {
   QrCode, Smartphone, Loader2, CheckCircle2, XCircle,
-  Wifi, WifiOff, Phone, Trash2, MessageSquare, RefreshCw,
+  Wifi, WifiOff, Phone, Trash2, MessageSquare, RefreshCw, Zap,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useWhatsAppInstances } from '@/hooks/use-integrations';
@@ -15,6 +15,7 @@ import { useToast } from '@/hooks/use-toast';
 
 const EVOLUTION_URL = 'https://api.flashcrms.com.br';
 const EVOLUTION_API_KEY = 'bigodao77chave';
+const WEBHOOK_RECEIVER_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/whatsapp-webhook`;
 
 async function callWhatsAppQrcode(body: Record<string, unknown>) {
   const { data: { session } } = await supabase.auth.getSession();
@@ -53,6 +54,7 @@ export function WhatsAppSettingsSection() {
   const [pairingPhone, setPairingPhone] = useState('');
   const [pairingLoading, setPairingLoading] = useState(false);
   const qrInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [activatingWebhook, setActivatingWebhook] = useState(false);
   // Track whether we have already auto-registered the webhook this session
   const webhookRegisteredRef = useRef(false);
 
@@ -183,21 +185,36 @@ export function WhatsAppSettingsSection() {
     setDeleting(false);
   };
 
-  const handleRegisterWebhook = async () => {
+  const handleActivateWebhook = async () => {
     if (!tenantInstance) return;
+    setActivatingWebhook(true);
     try {
-      const result = await callWhatsAppQrcode({
-        action: 'check_webhook',
-        instance_id: tenantInstance.id,
+      const evoUrl = (tenantInstance as any).evolution_url || EVOLUTION_URL;
+      const evoKey = (tenantInstance as any).evolution_api_key || EVOLUTION_API_KEY;
+      const instanceName = tenantInstance.instance_name;
+      const res = await fetch(`${evoUrl}/webhook/set/${instanceName}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', apikey: evoKey },
+        body: JSON.stringify({
+          webhook: {
+            enabled: true,
+            url: WEBHOOK_RECEIVER_URL,
+            events: ['MESSAGES_UPSERT', 'CONNECTION_UPDATE', 'QRCODE_UPDATED'],
+          },
+        }),
       });
-      if (result.error) throw new Error(result.error);
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(errText.slice(0, 200));
+      }
       toast({
-        title: 'Webhook registrado!',
+        title: 'Webhook ativado!',
         description: 'Mensagens do WhatsApp serão recebidas automaticamente.',
       });
     } catch (err: any) {
-      toast({ title: 'Erro ao registrar webhook', description: err.message, variant: 'destructive' });
+      toast({ title: 'Erro ao ativar webhook', description: err.message, variant: 'destructive' });
     }
+    setActivatingWebhook(false);
   };
 
   if (isLoading) {
@@ -267,12 +284,10 @@ export function WhatsAppSettingsSection() {
             </div>
           </div>
           <div className="flex items-center gap-1.5">
-            {isConnected && (
-              <Button variant="outline" size="sm" onClick={handleRegisterWebhook} className="gap-1.5 h-8 text-xs">
-                <RefreshCw className="h-3.5 w-3.5" />
-                Verificar Webhook
-              </Button>
-            )}
+            <Button variant="outline" size="sm" onClick={handleActivateWebhook} disabled={activatingWebhook} className="gap-1.5 h-8 text-xs">
+              {activatingWebhook ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
+              Ativar Webhook
+            </Button>
             <Button variant="ghost" size="icon" onClick={handleDelete} disabled={deleting} className="text-muted-foreground hover:text-destructive h-8 w-8">
               {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
             </Button>

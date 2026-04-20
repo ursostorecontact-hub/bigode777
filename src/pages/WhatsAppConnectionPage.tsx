@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Progress } from '@/components/ui/progress';
 import {
   QrCode, Smartphone, Loader2, CheckCircle2, XCircle, RefreshCw,
-  Plus, Trash2, Users, Save, MessageSquare, Wifi, WifiOff, UserPlus, Phone,
+  Plus, Trash2, Users, Save, MessageSquare, Wifi, WifiOff, UserPlus, Phone, Zap,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import {
@@ -22,6 +22,28 @@ import { useProfiles } from '@/hooks/use-leads';
 import { useToast } from '@/hooks/use-toast';
 
 // ── helpers ──
+
+const EVOLUTION_URL = 'https://api.flashcrms.com.br';
+const EVOLUTION_API_KEY = 'bigodao77chave';
+const WEBHOOK_RECEIVER_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/whatsapp-webhook`;
+
+// Calls Evolution API directly to register the webhook endpoint
+async function activateEvolutionWebhook(instanceName: string, evolutionUrl: string, apiKey: string) {
+  const res = await fetch(`${evolutionUrl}/webhook/set/${instanceName}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', apikey: apiKey },
+    body: JSON.stringify({
+      webhook: {
+        enabled: true,
+        url: WEBHOOK_RECEIVER_URL,
+        events: ['MESSAGES_UPSERT', 'CONNECTION_UPDATE', 'QRCODE_UPDATED'],
+      },
+    }),
+  });
+  const text = await res.text();
+  if (!res.ok) throw new Error(text.slice(0, 200));
+  return text;
+}
 
 async function callWhatsAppQrcode(body: Record<string, unknown>) {
   const { data: { session } } = await supabase.auth.getSession();
@@ -135,6 +157,7 @@ function InstanceCard({ instance, profiles, onRefresh }: {
   const [localAssignments, setLocalAssignments] = useState<Record<string, number>>({});
   const [showAddSeller, setShowAddSeller] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [activatingWebhook, setActivatingWebhook] = useState(false);
   const [connectMode, setConnectMode] = useState<'qr' | 'code'>('qr');
   const [pairingCode, setPairingCode] = useState<string | null>(null);
   const [pairingPhone, setPairingPhone] = useState('');
@@ -259,6 +282,22 @@ function InstanceCard({ instance, profiles, onRefresh }: {
     setPairingLoading(false);
   };
 
+  const handleActivateWebhook = async () => {
+    setActivatingWebhook(true);
+    try {
+      const evoUrl = instance.evolution_url || EVOLUTION_URL;
+      const evoKey = instance.evolution_api_key || EVOLUTION_API_KEY;
+      await activateEvolutionWebhook(instance.instance_name, evoUrl, evoKey);
+      toast({
+        title: 'Webhook ativado!',
+        description: 'Mensagens do WhatsApp serão recebidas automaticamente.',
+      });
+    } catch (err: any) {
+      toast({ title: 'Erro ao ativar webhook', description: err.message, variant: 'destructive' });
+    }
+    setActivatingWebhook(false);
+  };
+
   const handleDelete = async () => {
     if (!confirm(`Excluir instância "${instance.name || instance.instance_name}"?`)) return;
     setDeleting(true);
@@ -315,6 +354,10 @@ function InstanceCard({ instance, profiles, onRefresh }: {
                 Reconectar
               </Button>
             )}
+            <Button variant="outline" size="sm" onClick={handleActivateWebhook} disabled={activatingWebhook} className="gap-1.5 h-8 text-xs">
+              {activatingWebhook ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
+              Ativar Webhook
+            </Button>
             <Button variant="ghost" size="icon" onClick={handleDelete} disabled={deleting} className="text-muted-foreground hover:text-destructive h-8 w-8">
               {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
             </Button>
