@@ -178,11 +178,12 @@ Deno.serve(async (req) => {
 
       console.log("Evolution send response:", JSON.stringify(evoData).slice(0, 300));
 
-      // Save message to DB
+      // Save message to DB — tenant_id from the chat row so RLS keeps it visible
       const { data: msg, error: msgErr } = await supabase
         .from("whatsapp_messages")
         .insert({
           chat_id,
+          tenant_id: chat.tenant_id,
           from_me: true,
           remote_jid: chat.remote_jid,
           message_type: actualType,

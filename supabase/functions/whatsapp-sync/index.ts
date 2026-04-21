@@ -174,12 +174,13 @@ Deno.serve(async (req) => {
         // Resolve name: address book > pushName > chat name > phone
         const contactName = contactMap[remoteJid] || contactMap[contactPhone] || chat.pushName || chat.name || chat.contact || contactPhone;
 
-        // Upsert chat
+        // Upsert chat — tenant_id must be set so RLS lets the row be visible
         const { data: dbChat, error: chatErr } = await supabase
           .from("whatsapp_chats")
           .upsert(
             {
               whatsapp_instance_id: instance.id,
+              tenant_id: instance.tenant_id,
               remote_jid: remoteJid,
               contact_name: contactName,
               contact_phone: contactPhone,
@@ -334,6 +335,7 @@ Deno.serve(async (req) => {
 
               await supabase.from("whatsapp_messages").insert({
                 chat_id: dbChat.id,
+                tenant_id: instance.tenant_id,
                 from_me: fromMe,
                 remote_jid: remoteJid,
                 message_type: messageType,
