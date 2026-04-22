@@ -8,6 +8,27 @@ const corsHeaders = {
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
+// EVOLUTION_SERVER_URL overrides instance.evolution_url for server-side calls.
+// Use this when the public HTTPS URL has SSL issues (e.g. NotValidForName).
+// Set it in Supabase Edge Function secrets to the internal HTTP URL of the VPS,
+// e.g. http://YOUR_VPS_IP:64644
+const EVOLUTION_SERVER_URL_OVERRIDE = Deno.env.get("EVOLUTION_SERVER_URL") || "";
+
+// Returns the URL to use for server-side calls to Evolution API.
+function evoServerUrl(instanceUrl: string): string {
+  return EVOLUTION_SERVER_URL_OVERRIDE || instanceUrl;
+}
+
+// Normalize WhatsApp JID so the same contact always maps to the same row.
+// Evolution API v2 uses @lid for linked-device IDs alongside @s.whatsapp.net.
+// We always store the @s.whatsapp.net form to prevent duplicates.
+function normalizeJid(jid: string): string {
+  if (!jid) return jid;
+  // @lid -> @s.whatsapp.net (same phone, different transport format)
+  if (jid.endsWith("@lid")) return jid.replace(/@lid$/, "@s.whatsapp.net");
+  return jid;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -78,7 +99,7 @@ Deno.serve(async (req) => {
     const contactMap: Record<string, string> = {};
     try {
       const contactsRes = await fetch(
-        `${instance.evolution_url}/chat/findContacts/${instance.instance_name}`,
+        `${evoServerUrl(instance.evolution_url)}/chat/findContacts/${instance.instance_name}`,
         {
           method: "POST",
           headers: {
@@ -110,7 +131,7 @@ Deno.serve(async (req) => {
     
     // Try POST /chat/findChats
     let chatsRes = await fetch(
-      `${instance.evolution_url}/chat/findChats/${instance.instance_name}`,
+      `${evoServerUrl(instance.evolution_url)}/chat/findChats/${instance.instance_name}`,
       {
         method: "POST",
         headers: {
@@ -130,7 +151,7 @@ Deno.serve(async (req) => {
     } else {
       // Try GET /chat/findContacts as fallback
       chatsRes = await fetch(
-        `${instance.evolution_url}/chat/findContacts/${instance.instance_name}`,
+        `${evoServerUrl(instance.evolution_url)}/chat/findContacts/${instance.instance_name}`,
         {
           method: "POST",
           headers: {
@@ -158,17 +179,18 @@ Deno.serve(async (req) => {
 
     for (const chat of chats) {
       try {
-        // Evolution API v2: chat has remoteJid field, id is internal
-        const remoteJid = chat.remoteJid || "";
+        // Evolution API v2: chat has remoteJid field, id is internal.
+        // Normalize @lid -> @s.whatsapp.net to prevent duplicate rows for the same contact.
+        const remoteJid = normalizeJid(chat.remoteJid || "");
 
-        // Only sync individual WhatsApp contacts (@s.whatsapp.net or @lid)
+        // Only sync individual WhatsApp contacts (@s.whatsapp.net)
         // Skip groups (@g.us), broadcasts, and internal IDs without @
         if (!remoteJid || !remoteJid.includes("@") || remoteJid.includes("@g.us") || remoteJid === "status@broadcast") {
           continue;
         }
 
         // Try to get the phone number from remoteJidAlt or remoteJid
-        const altJid = chat.lastMessage?.key?.remoteJidAlt || "";
+        const altJid = normalizeJid(chat.lastMessage?.key?.remoteJidAlt || "");
         const phoneJid = altJid.includes("@s.whatsapp.net") ? altJid : remoteJid;
         const contactPhone = phoneJid.split("@")[0];
         // Resolve name: address book > pushName > chat name > phone
@@ -240,7 +262,7 @@ Deno.serve(async (req) => {
         // 2. Fetch messages for this chat
         try {
           const msgsRes = await fetch(
-            `${instance.evolution_url}/chat/findMessages/${instance.instance_name}`,
+            `${evoServerUrl(instance.evolution_url)}/chat/findMessages/${instance.instance_name}`,
             {
               method: "POST",
               headers: {

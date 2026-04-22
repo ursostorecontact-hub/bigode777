@@ -8,6 +8,20 @@ const corsHeaders = {
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
+// Override for server-side Evolution API calls (avoids SSL issues with public URL).
+// Set EVOLUTION_SERVER_URL in Supabase Edge Function secrets, e.g. http://YOUR_VPS_IP:64644
+const EVOLUTION_SERVER_URL_OVERRIDE = Deno.env.get("EVOLUTION_SERVER_URL") || "";
+function evoServerUrl(instanceUrl: string): string {
+  return EVOLUTION_SERVER_URL_OVERRIDE || instanceUrl;
+}
+
+// Normalize WhatsApp JIDs: @lid -> @s.whatsapp.net to prevent duplicates
+function normalizeJid(jid: string): string {
+  if (!jid) return jid;
+  if (jid.endsWith("@lid")) return jid.replace(/@lid$/, "@s.whatsapp.net");
+  return jid;
+}
+
 // Download media from Evolution API and upload to Supabase storage
 async function downloadAndStoreMedia(
   supabase: any,
@@ -20,7 +34,7 @@ async function downloadAndStoreMedia(
   try {
     // Try to get base64 media from Evolution API
     const mediaRes = await fetch(
-      `${evolutionUrl}/chat/getBase64FromMediaMessage/${instanceName}`,
+      `${evoServerUrl(evolutionUrl)}/chat/getBase64FromMediaMessage/${instanceName}`,
       {
         method: "POST",
         headers: {
@@ -139,7 +153,8 @@ Deno.serve(async (req) => {
       const msgs = Array.isArray(data) ? data : [data];
       for (const msg of msgs) {
         const key = msg.key || {};
-        const remoteJid = key.remoteJid || msg.remoteJid || "";
+        // Normalize JID: @lid -> @s.whatsapp.net to prevent duplicate chat rows
+        const remoteJid = normalizeJid(key.remoteJid || msg.remoteJid || "");
         const fromMe = key.fromMe ?? false;
         const messageId = key.id || msg.id || "";
 
@@ -189,7 +204,7 @@ Deno.serve(async (req) => {
         if (needsMediaDownload && messageId) {
           const storedUrl = await downloadAndStoreMedia(
             supabase,
-            instance.evolution_url,
+            evoServerUrl(instance.evolution_url),
             instance.evolution_api_key,
             instanceName,
             messageId,
@@ -207,7 +222,7 @@ Deno.serve(async (req) => {
         let profilePicUrl: string | null = null;
         try {
           const picRes = await fetch(
-            `${instance.evolution_url}/chat/fetchProfilePictureUrl/${instanceName}`,
+            `${evoServerUrl(instance.evolution_url)}/chat/fetchProfilePictureUrl/${instanceName}`,
             {
               method: "POST",
               headers: { "Content-Type": "application/json", apikey: instance.evolution_api_key },

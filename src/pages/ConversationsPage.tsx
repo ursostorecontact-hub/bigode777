@@ -30,6 +30,23 @@ import { supabase } from '@/integrations/supabase/client';
 import { useLabels, useLabelAssignments, useAssignLabel, useUnassignLabel } from '@/hooks/use-labels';
 import { LabelManagerDialog, LabelAssignPopover, LabelBadges } from '@/components/LabelManager';
 
+// Returns true when a media_url is publicly accessible by the browser.
+// URLs pointing to localhost, private IPs, or internal hostnames are not accessible.
+function isMediaAccessible(url: string | null | undefined): boolean {
+  if (!url) return false;
+  try {
+    const { hostname } = new URL(url);
+    if (hostname === 'localhost' || hostname === '127.0.0.1') return false;
+    // 10.x.x.x / 172.16-31.x.x / 192.168.x.x
+    if (/^10\.|^172\.(1[6-9]|2\d|3[01])\.|^192\.168\./.test(hostname)) return false;
+    // Raw IP that looks like a private/VPS address (heuristic: no TLD)
+    if (/^\d+\.\d+\.\d+\.\d+$/.test(hostname)) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function formatPhoneDisplay(phone: string) {
   if (!phone) return '';
   // Remove non-digits
@@ -588,24 +605,24 @@ function MessageArea({
                             <p className="text-[10px] text-destructive/70 mb-0.5 flex items-center gap-1">
                               <Trash2 className="h-3 w-3" /> Apagada para o cliente
                             </p>
-                            {msg.message_type === 'audio' && msg.media_url ? (
+                            {msg.message_type === 'audio' && isMediaAccessible(msg.media_url) ? (
                               <div className="flex items-center gap-2 min-w-[240px]">
                                 <Mic className="h-4 w-4 shrink-0 opacity-70" />
                                 <audio controls preload="auto" className="h-10 w-full max-w-[260px]" style={{ minWidth: '200px' }}>
-                                  <source src={msg.media_url} type="audio/ogg; codecs=opus" />
-                                  <source src={msg.media_url} type="audio/ogg" />
-                                  <source src={msg.media_url} />
+                                  <source src={msg.media_url!} type="audio/ogg; codecs=opus" />
+                                  <source src={msg.media_url!} type="audio/ogg" />
+                                  <source src={msg.media_url!} />
                                 </audio>
                               </div>
-                            ) : msg.message_type === 'image' && msg.media_url ? (
-                              <a href={msg.media_url} target="_blank" rel="noopener noreferrer">
-                                <img src={msg.media_url} alt="Imagem" className="rounded-lg max-w-[250px] max-h-[300px] object-cover cursor-pointer" loading="lazy" />
+                            ) : msg.message_type === 'image' && isMediaAccessible(msg.media_url) ? (
+                              <a href={msg.media_url!} target="_blank" rel="noopener noreferrer">
+                                <img src={msg.media_url!} alt="Imagem" className="rounded-lg max-w-[250px] max-h-[300px] object-cover cursor-pointer" loading="lazy" />
                               </a>
                             ) : (
                               <p className="whitespace-pre-wrap break-words text-sm">{msg.content}</p>
                             )}
                           </div>
-                        ) : msg.message_type === 'audio' && msg.media_url ? (
+                        ) : msg.message_type === 'audio' && isMediaAccessible(msg.media_url) ? (
                           <div className="flex items-center gap-2 min-w-[240px]">
                             <Mic className="h-4 w-4 shrink-0 opacity-70" />
                             <audio
@@ -614,11 +631,11 @@ function MessageArea({
                               className="h-10 w-full max-w-[260px]"
                               style={{ minWidth: '200px' }}
                             >
-                              <source src={msg.media_url} type="audio/ogg; codecs=opus" />
-                              <source src={msg.media_url} type="audio/ogg" />
-                              <source src={msg.media_url} type="audio/mpeg" />
-                              <source src={msg.media_url} type="audio/mp4" />
-                              <source src={msg.media_url} />
+                              <source src={msg.media_url!} type="audio/ogg; codecs=opus" />
+                              <source src={msg.media_url!} type="audio/ogg" />
+                              <source src={msg.media_url!} type="audio/mpeg" />
+                              <source src={msg.media_url!} type="audio/mp4" />
+                              <source src={msg.media_url!} />
                               Seu navegador não suporta áudio.
                             </audio>
                           </div>
@@ -627,11 +644,11 @@ function MessageArea({
                             <Mic className="h-4 w-4 shrink-0 opacity-70" />
                             <span className="text-sm">🎤 Áudio (mídia indisponível)</span>
                           </div>
-                        ) : msg.message_type === 'image' && msg.media_url ? (
+                        ) : msg.message_type === 'image' && isMediaAccessible(msg.media_url) ? (
                           <div>
-                            <a href={msg.media_url} target="_blank" rel="noopener noreferrer">
+                            <a href={msg.media_url!} target="_blank" rel="noopener noreferrer">
                               <img
-                                src={msg.media_url}
+                                src={msg.media_url!}
                                 alt="Imagem"
                                 className="rounded-lg max-w-[250px] max-h-[300px] object-cover cursor-pointer"
                                 loading="lazy"
@@ -648,7 +665,7 @@ function MessageArea({
                               <p className="whitespace-pre-wrap break-words mt-1">{msg.content}</p>
                             )}
                           </div>
-                        ) : msg.message_type === 'video' && msg.media_url ? (
+                        ) : msg.message_type === 'video' && isMediaAccessible(msg.media_url) ? (
                           <div>
                             <video
                               controls
@@ -656,16 +673,16 @@ function MessageArea({
                               className="rounded-lg max-w-[250px] max-h-[300px]"
                               playsInline
                             >
-                              <source src={msg.media_url} type="video/mp4" />
-                              <source src={msg.media_url} />
+                              <source src={msg.media_url!} type="video/mp4" />
+                              <source src={msg.media_url!} />
                             </video>
                             {msg.content && msg.content !== '🎥 Vídeo' && (
                               <p className="whitespace-pre-wrap break-words mt-1">{msg.content}</p>
                             )}
                           </div>
-                        ) : msg.message_type === 'document' && msg.media_url ? (
+                        ) : msg.message_type === 'document' && isMediaAccessible(msg.media_url) ? (
                           <a
-                            href={msg.media_url}
+                            href={msg.media_url!}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="flex items-center gap-2 underline"
@@ -673,9 +690,9 @@ function MessageArea({
                             <FileText className="h-4 w-4 shrink-0" />
                             <span className="text-sm">{msg.content || '📄 Documento'}</span>
                           </a>
-                        ) : msg.message_type === 'sticker' && msg.media_url ? (
+                        ) : msg.message_type === 'sticker' && isMediaAccessible(msg.media_url) ? (
                           <img
-                            src={msg.media_url}
+                            src={msg.media_url!}
                             alt="Sticker"
                             className="max-w-[150px] max-h-[150px]"
                             loading="lazy"

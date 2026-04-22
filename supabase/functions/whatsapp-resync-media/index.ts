@@ -7,6 +7,10 @@ const corsHeaders = {
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const EVOLUTION_SERVER_URL_OVERRIDE = Deno.env.get("EVOLUTION_SERVER_URL") || "";
+function evoServerUrl(instanceUrl: string): string {
+  return EVOLUTION_SERVER_URL_OVERRIDE || instanceUrl;
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -36,13 +40,21 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Find messages with expired WhatsApp CDN URLs (mmg.whatsapp.net)
+    // Find messages with inaccessible media URLs:
+    // - WhatsApp CDN URLs (mmg.whatsapp.net) — expire after a few days
+    // - localhost/internal URLs — not accessible from the browser
+    // - null media_url on media messages — media was never stored
     const { data: messages, error } = await supabase
       .from("whatsapp_messages")
       .select("id, evolution_message_id, message_type, media_url, chat_id")
-      .not("media_url", "is", null)
-      .like("media_url", "%whatsapp.net%")
       .in("message_type", ["audio", "image", "video", "document", "sticker"])
+      .or(
+        "media_url.is.null," +
+        "media_url.like.%whatsapp.net%," +
+        "media_url.like.%localhost%," +
+        "media_url.like.%127.0.0.1%"
+      )
+      .not("evolution_message_id", "is", null)
       .limit(100);
 
     if (error) throw error;
@@ -89,7 +101,7 @@ Deno.serve(async (req) => {
 
       try {
         const mediaRes = await fetch(
-          `${instance.evolution_url}/chat/getBase64FromMediaMessage/${instance.instance_name}`,
+          `${evoServerUrl(instance.evolution_url)}/chat/getBase64FromMediaMessage/${instance.instance_name}`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json", apikey: instance.evolution_api_key },
