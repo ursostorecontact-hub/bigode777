@@ -393,14 +393,12 @@ function MessageArea({
   onBack,
   onToggleAI,
   aiPanelOpen,
-  applySuggestion,
 }: {
   chatId: string;
   chat: any;
   onBack: () => void;
-  onToggleAI?: () => void;
-  aiPanelOpen?: boolean;
-  applySuggestion?: string | null;
+  onToggleAI: () => void;
+  aiPanelOpen: boolean;
 }) {
   const { data: messages, isLoading } = useWhatsAppMessages(chatId);
   const sendMessage = useSendWhatsAppMessage();
@@ -423,10 +421,6 @@ function MessageArea({
       markRead.mutate(chatId);
     }
   }, [chatId]);
-
-  useEffect(() => {
-    if (applySuggestion) setText(applySuggestion);
-  }, [applySuggestion]);
 
   const handleSend = async () => {
     const msg = text.trim();
@@ -530,8 +524,15 @@ function MessageArea({
   const contactName = getDisplayName(chat);
   const contactPhone = chat?.contact_phone || '';
 
+  const aiMessages = (messages ?? [])
+    .filter((m) => m.content?.trim())
+    .slice(-30)
+    .map((m) => ({ role: m.from_me ? 'assistant' as const : 'user' as const, content: m.content }));
+
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex h-full overflow-hidden">
+      {/* ── Chat column ── */}
+      <div className="flex flex-col flex-1 min-w-0">
       {/* Chat Header */}
       <div className="flex items-center gap-3 p-3 border-b border-border bg-card">
         <Button variant="ghost" size="icon" className="md:hidden h-8 w-8" onClick={onBack}>
@@ -848,6 +849,18 @@ function MessageArea({
           chatId={chatId}
         />
       )}
+      </div>{/* end chat column */}
+
+      {/* ── AI Sales Panel ── */}
+      {aiPanelOpen && (
+        <AISalesPanel
+          chatId={chatId}
+          contactName={contactName}
+          messages={aiMessages}
+          onApplySuggestion={setText}
+          onClose={onToggleAI}
+        />
+      )}
     </div>
   );
 }
@@ -875,25 +888,17 @@ export default function ConversationsPage() {
   const [activeLabel, setActiveLabel] = useState<string | null>(null);
   const [showLabelManager, setShowLabelManager] = useState(false);
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
-  const [aiSuggestion, setAiSuggestion] = useState<string | null>(null);
   const { data: labels } = useLabels();
   const { data: chatAssignments } = useLabelAssignments('chat');
   const assignLabel = useAssignLabel();
   const unassignLabel = useUnassignLabel();
 
-  const { data: allMessages } = useWhatsAppMessages(selectedChatId ?? '');
-
   const selectedChat = chats?.find((c) => c.id === selectedChatId);
-  const contactName = selectedChat ? getDisplayName(selectedChat) : '';
 
-  const aiMessages = (allMessages ?? [])
-    .filter((m: any) => m.content?.trim())
-    .slice(-30)
-    .map((m: any) => ({ role: m.from_me ? 'assistant' : 'user', content: m.content })) as { role: 'user' | 'assistant'; content: string }[];
-
+  // Close AI panel when switching chats so it doesn't carry stale context
   const handleSelectChat = (id: string) => {
     setSelectedChatId(id);
-    setAiSuggestion(null);
+    setAiPanelOpen(false);
   };
 
   if (isLoading) {
@@ -930,21 +935,11 @@ export default function ConversationsPage() {
             onBack={() => setSelectedChatId(null)}
             onToggleAI={() => setAiPanelOpen((o) => !o)}
             aiPanelOpen={aiPanelOpen}
-            applySuggestion={aiSuggestion}
           />
         ) : (
           <EmptyChat />
         )}
       </div>
-      {selectedChatId && aiPanelOpen && (
-        <AISalesPanel
-          chatId={selectedChatId}
-          contactName={contactName}
-          messages={aiMessages}
-          onApplySuggestion={(text) => { setAiSuggestion(text); setTimeout(() => setAiSuggestion(null), 100); }}
-          onClose={() => setAiPanelOpen(false)}
-        />
-      )}
       <LabelManagerDialog open={showLabelManager} onOpenChange={setShowLabelManager} />
     </div>
   );
