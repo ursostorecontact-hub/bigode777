@@ -24,6 +24,7 @@ import WhatsAppConnectionPage from "@/pages/WhatsAppConnectionPage";
 import ConversationsPage from "@/pages/ConversationsPage";
 import SuperAdminPage from "@/pages/SuperAdminPage";
 import FacebookAudiencesPage from "@/pages/FacebookAudiencesPage";
+import CatalogPage from "@/pages/CatalogPage";
 import NotFound from "@/pages/NotFound";
 import TermsPage from "@/pages/TermsPage";
 import PrivacyPage from "@/pages/PrivacyPage";
@@ -80,6 +81,7 @@ function AppRoutes() {
       <Route path="/conversas" element={<ProtectedRoute><ConversationsPage /></ProtectedRoute>} />
       <Route path="/tarefas" element={<ProtectedRoute><TasksPage /></ProtectedRoute>} />
       <Route path="/pipeline" element={<ProtectedRoute roles={['admin', 'manager']}><PipelinePage /></ProtectedRoute>} />
+      <Route path="/catalogo" element={<ProtectedRoute roles={['admin', 'manager']}><CatalogPage /></ProtectedRoute>} />
       <Route path="/clientes" element={<ProtectedRoute roles={['admin', 'manager']}><ClientsPage /></ProtectedRoute>} />
       <Route path="/distribuicao" element={<ProtectedRoute roles={['admin', 'manager']}><DistributionPage /></ProtectedRoute>} />
       <Route path="/relatorios" element={<ProtectedRoute roles={['admin', 'manager']}><ReportsPage /></ProtectedRoute>} />

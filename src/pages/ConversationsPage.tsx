@@ -16,8 +16,9 @@ import { Label } from '@/components/ui/label';
 import {
   MessageSquare, Send, Loader2, Search, Phone, ArrowLeft,
   Check, CheckCheck, Clock, Mic, MicOff, UserPlus, Paperclip,
-  Image as ImageIcon, Video, FileText, X, Trash2, Tag, Settings2,
+  Image as ImageIcon, Video, FileText, X, Trash2, Tag, Settings2, Sparkles,
 } from 'lucide-react';
+import { AISalesPanel } from '@/components/AISalesPanel';
 import {
   useWhatsAppChats,
   useWhatsAppMessages,
@@ -390,10 +391,16 @@ function MessageArea({
   chatId,
   chat,
   onBack,
+  onToggleAI,
+  aiPanelOpen,
+  applySuggestion,
 }: {
   chatId: string;
   chat: any;
   onBack: () => void;
+  onToggleAI?: () => void;
+  aiPanelOpen?: boolean;
+  applySuggestion?: string | null;
 }) {
   const { data: messages, isLoading } = useWhatsAppMessages(chatId);
   const sendMessage = useSendWhatsAppMessage();
@@ -416,6 +423,10 @@ function MessageArea({
       markRead.mutate(chatId);
     }
   }, [chatId]);
+
+  useEffect(() => {
+    if (applySuggestion) setText(applySuggestion);
+  }, [applySuggestion]);
 
   const handleSend = async () => {
     const msg = text.trim();
@@ -539,6 +550,17 @@ function MessageArea({
           )}
         </div>
         <div className="flex items-center gap-1">
+          {onToggleAI && (
+            <Button
+              variant={aiPanelOpen ? 'secondary' : 'ghost'}
+              size="icon"
+              className="h-9 w-9"
+              title="IA de Vendas"
+              onClick={onToggleAI}
+            >
+              <Sparkles className="h-4 w-4 text-primary" />
+            </Button>
+          )}
           {contactPhone && (
             <Button
               variant="ghost"
@@ -852,12 +874,27 @@ export default function ConversationsPage() {
   const [search, setSearch] = useState('');
   const [activeLabel, setActiveLabel] = useState<string | null>(null);
   const [showLabelManager, setShowLabelManager] = useState(false);
+  const [aiPanelOpen, setAiPanelOpen] = useState(false);
+  const [aiSuggestion, setAiSuggestion] = useState<string | null>(null);
   const { data: labels } = useLabels();
   const { data: chatAssignments } = useLabelAssignments('chat');
   const assignLabel = useAssignLabel();
   const unassignLabel = useUnassignLabel();
 
+  const { data: allMessages } = useWhatsAppMessages(selectedChatId ?? '');
+
   const selectedChat = chats?.find((c) => c.id === selectedChatId);
+  const contactName = selectedChat ? getDisplayName(selectedChat) : '';
+
+  const aiMessages = (allMessages ?? [])
+    .filter((m: any) => m.content?.trim())
+    .slice(-30)
+    .map((m: any) => ({ role: m.from_me ? 'assistant' : 'user', content: m.content })) as { role: 'user' | 'assistant'; content: string }[];
+
+  const handleSelectChat = (id: string) => {
+    setSelectedChatId(id);
+    setAiSuggestion(null);
+  };
 
   if (isLoading) {
     return (
@@ -873,7 +910,7 @@ export default function ConversationsPage() {
         <ChatList
           chats={chats || []}
           selectedId={selectedChatId}
-          onSelect={setSelectedChatId}
+          onSelect={handleSelectChat}
           search={search}
           onSearchChange={setSearch}
           labels={labels || []}
@@ -885,17 +922,29 @@ export default function ConversationsPage() {
           onManageLabels={() => setShowLabelManager(true)}
         />
       </div>
-      <div className={`flex-1 ${!selectedChatId ? 'hidden md:flex md:flex-col' : 'flex flex-col'}`}>
+      <div className={`flex-1 min-w-0 ${!selectedChatId ? 'hidden md:flex md:flex-col' : 'flex flex-col'}`}>
         {selectedChatId && selectedChat ? (
           <MessageArea
             chatId={selectedChatId}
             chat={selectedChat}
             onBack={() => setSelectedChatId(null)}
+            onToggleAI={() => setAiPanelOpen((o) => !o)}
+            aiPanelOpen={aiPanelOpen}
+            applySuggestion={aiSuggestion}
           />
         ) : (
           <EmptyChat />
         )}
       </div>
+      {selectedChatId && aiPanelOpen && (
+        <AISalesPanel
+          chatId={selectedChatId}
+          contactName={contactName}
+          messages={aiMessages}
+          onApplySuggestion={(text) => { setAiSuggestion(text); setTimeout(() => setAiSuggestion(null), 100); }}
+          onClose={() => setAiPanelOpen(false)}
+        />
+      )}
       <LabelManagerDialog open={showLabelManager} onOpenChange={setShowLabelManager} />
     </div>
   );

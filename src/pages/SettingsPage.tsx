@@ -8,7 +8,8 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Building2, Users, Link, Key, Loader2, UserPlus, Trash2, Smartphone, KeyRound, RefreshCw } from 'lucide-react';
+import { Building2, Users, Link, Key, Loader2, UserPlus, Trash2, Smartphone, KeyRound, RefreshCw, Sparkles, Clock } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
 import { WhatsAppSettingsSection } from '@/components/WhatsAppSettingsSection';
 import { Switch } from '@/components/ui/switch';
 import { useSettings, useUpdateSettings, useProfilesWithRoles } from '@/hooks/use-leads';
@@ -37,6 +38,122 @@ function generateStrongPassword(length = 24): string {
   }
 
   return password.join('');
+}
+
+// ── AI Settings Section ──────────────────────────────────────────────────────
+
+const AI_MODES = [
+  { value: 'suggestion', label: 'Sugestão', desc: 'IA sugere respostas, humano decide' },
+  { value: 'hybrid', label: 'Híbrido', desc: 'IA responde fora do horário, humano no horário' },
+  { value: 'automatic', label: 'Automático', desc: 'IA responde automaticamente (cuidado!)' },
+];
+
+function AiSettingsSection() {
+  const { toast } = useToast();
+  const [aiEnabled, setAiEnabled] = useState(false);
+  const [aiMode, setAiMode] = useState('suggestion');
+  const [customPersonality, setCustomPersonality] = useState('');
+  const [workStart, setWorkStart] = useState('08:00');
+  const [workEnd, setWorkEnd] = useState('18:00');
+  const [escalationKeywords, setEscalationKeywords] = useState('reclamação, cancelar, reembolso, devolução, procon');
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const config = { aiEnabled, aiMode, customPersonality, workStart, workEnd, escalationKeywords };
+      await supabase.from('settings').upsert([{ key: 'ai_sales_config', value: JSON.stringify(config) }]);
+      toast({ title: 'Configurações de IA salvas' });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Erro desconhecido';
+      toast({ title: 'Erro ao salvar', description: msg, variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-primary" />Atendimento com IA
+            </CardTitle>
+            <CardDescription>Configure o assistente de vendas com IA para suas conversas</CardDescription>
+          </div>
+          <Switch checked={aiEnabled} onCheckedChange={setAiEnabled} />
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        <div className="space-y-2">
+          <Label>Modo de operação</Label>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            {AI_MODES.map((m) => (
+              <button
+                key={m.value}
+                type="button"
+                onClick={() => setAiMode(m.value)}
+                className={`text-left p-3 rounded-lg border text-sm transition-colors ${
+                  aiMode === m.value
+                    ? 'border-primary bg-primary/5 text-foreground'
+                    : 'border-border text-muted-foreground hover:border-primary/40'
+                }`}
+              >
+                <p className="font-medium">{m.label}</p>
+                <p className="text-xs mt-0.5 text-muted-foreground">{m.desc}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {aiMode === 'hybrid' && (
+          <div className="space-y-2">
+            <Label className="flex items-center gap-1.5">
+              <Clock className="h-3.5 w-3.5" />Horário de funcionamento da IA
+            </Label>
+            <div className="flex items-center gap-2">
+              <Input type="time" value={workStart} onChange={(e) => setWorkStart(e.target.value)} className="w-32" />
+              <span className="text-muted-foreground text-sm">até</span>
+              <Input type="time" value={workEnd} onChange={(e) => setWorkEnd(e.target.value)} className="w-32" />
+              <span className="text-xs text-muted-foreground">Fora deste horário, a IA assume</span>
+            </div>
+          </div>
+        )}
+
+        <div className="space-y-2">
+          <Label>Personalidade personalizada (opcional)</Label>
+          <Textarea
+            value={customPersonality}
+            onChange={(e) => setCustomPersonality(e.target.value)}
+            placeholder="Ex: Nosso negócio é uma academia premium. Foque em destacar os benefícios de saúde e qualidade de vida..."
+            rows={3}
+            className="text-sm"
+          />
+          <p className="text-xs text-muted-foreground">
+            Adicione contexto específico do seu negócio. O estilo AIDA e o tom consultivo são mantidos.
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Palavras-chave que escalam para humano</Label>
+          <Input
+            value={escalationKeywords}
+            onChange={(e) => setEscalationKeywords(e.target.value)}
+            placeholder="reclamação, cancelar, reembolso..."
+          />
+          <p className="text-xs text-muted-foreground">Separe por vírgula. Quando detectadas, a IA avisa para assumir o atendimento.</p>
+        </div>
+
+        <div className="flex justify-end">
+          <Button onClick={handleSave} disabled={saving}>
+            {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            Salvar configurações de IA
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
 
 export default function SettingsPage() {
@@ -328,6 +445,9 @@ export default function SettingsPage() {
 
       {/* WhatsApp Connection */}
       <WhatsAppSettingsSection />
+
+      {/* AI Settings */}
+      <AiSettingsSection />
 
       {/* Dialog para criar novo usuário */}
       <Dialog open={showNewUser} onOpenChange={setShowNewUser}>
