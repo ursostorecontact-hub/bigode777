@@ -18,7 +18,6 @@ function WhatsAppSection() {
 
   const [showNew, setShowNew] = useState(false);
   const [name, setName] = useState('');
-  const [instanceName, setInstanceName] = useState('');
   const [qrData, setQrData] = useState<{ id: string; qr: string } | null>(null);
 
   const normalizeQrSrc = (value?: string | null) => {
@@ -27,16 +26,11 @@ function WhatsAppSection() {
   };
 
   const handleCreate = async () => {
-    if (!name || !instanceName) {
-      toast({ title: 'Preencha todos os campos', variant: 'destructive' });
+    if (!name) {
+      toast({ title: 'Preencha o nome', variant: 'destructive' });
       return;
     }
-    const result = await createInstance.mutateAsync({
-      name,
-      evolution_url: 'https://api.flashcrms.com.br',
-      evolution_api_key: 'bigodao77chave',
-      instance_name: instanceName,
-    });
+    const result = await createInstance.mutateAsync({ name });
 
     const qrSrc = normalizeQrSrc(result.qrcode?.base64);
     if (qrSrc) {
@@ -45,7 +39,6 @@ function WhatsAppSection() {
 
     setShowNew(false);
     setName('');
-    setInstanceName('');
   };
 
   const handleGetQR = async (id: string) => {
@@ -145,10 +138,6 @@ function WhatsAppSection() {
             <div className="space-y-1">
               <Label>Nome (identificação) *</Label>
               <Input value={name} onChange={e => setName(e.target.value)} placeholder="Ex: WhatsApp Comercial" />
-            </div>
-            <div className="space-y-1">
-              <Label>Nome da Instância *</Label>
-              <Input value={instanceName} onChange={e => setInstanceName(e.target.value)} placeholder="meu-whatsapp-01" />
             </div>
           </div>
           <DialogFooter>

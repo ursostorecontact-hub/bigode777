@@ -13,10 +13,6 @@ import { useWhatsAppInstances } from '@/hooks/use-integrations';
 import { useTenant } from '@/contexts/TenantContext';
 import { useToast } from '@/hooks/use-toast';
 
-const EVOLUTION_URL = 'https://api.flashcrms.com.br';
-const EVOLUTION_API_KEY = 'bigodao77chave';
-const WEBHOOK_RECEIVER_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/whatsapp-webhook`;
-
 async function callWhatsAppQrcode(body: Record<string, unknown>) {
   const { data: { session } } = await supabase.auth.getSession();
   const res = await fetch(
@@ -102,9 +98,7 @@ export function WhatsAppSettingsSection() {
     try {
       const result = await callWhatsAppQrcode({
         action: 'create',
-        evolution_url: EVOLUTION_URL,
-        evolution_api_key: EVOLUTION_API_KEY,
-        instance_name: tenant.slug,
+        name: (tenant as any).name || tenant.slug,
       });
       if (result.error) throw new Error(result.error);
       toast({ title: 'Instância criada! Agora conecte via QR Code.' });
@@ -189,24 +183,8 @@ export function WhatsAppSettingsSection() {
     if (!tenantInstance) return;
     setActivatingWebhook(true);
     try {
-      const evoUrl = (tenantInstance as any).evolution_url || EVOLUTION_URL;
-      const evoKey = (tenantInstance as any).evolution_api_key || EVOLUTION_API_KEY;
-      const instanceName = tenantInstance.instance_name;
-      const res = await fetch(`${evoUrl}/webhook/set/${instanceName}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', apikey: evoKey },
-        body: JSON.stringify({
-          webhook: {
-            enabled: true,
-            url: WEBHOOK_RECEIVER_URL,
-            events: ['MESSAGES_UPSERT', 'CONNECTION_UPDATE', 'QRCODE_UPDATED'],
-          },
-        }),
-      });
-      if (!res.ok) {
-        const errText = await res.text();
-        throw new Error(errText.slice(0, 200));
-      }
+      const result = await callWhatsAppQrcode({ action: 'check_webhook', instance_id: tenantInstance.id });
+      if (result.error) throw new Error(result.error);
       toast({
         title: 'Webhook ativado!',
         description: 'Mensagens do WhatsApp serão recebidas automaticamente.',

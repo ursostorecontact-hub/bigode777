@@ -96,9 +96,9 @@ export function useCreateWhatsAppInstance() {
   return useMutation({
     mutationFn: async (params: {
       name: string;
-      evolution_url: string;
-      evolution_api_key: string;
-      instance_name: string;
+      evolution_url?: string;
+      evolution_api_key?: string;
+      instance_name?: string;
     }) => {
       const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch(

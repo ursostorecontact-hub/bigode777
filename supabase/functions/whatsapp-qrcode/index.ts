@@ -5,10 +5,14 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-// Normalize credentials from DB row
+// Env-based Evolution API credentials — set in Supabase Edge Function secrets.
+const EVOLUTION_API_URL_ENV = Deno.env.get("EVOLUTION_API_URL") || "";
+const EVOLUTION_API_KEY_ENV = Deno.env.get("EVOLUTION_API_KEY") || "";
+
+// Normalize credentials from DB row, falling back to env vars
 function getCredentials(inst: Record<string, any>) {
-  const url = inst.evolution_url || "";
-  const key = inst.evolution_api_key || "";
+  const url = inst.evolution_url || EVOLUTION_API_URL_ENV || "";
+  const key = inst.evolution_api_key || EVOLUTION_API_KEY_ENV || "";
   return { url, key };
 }
 
@@ -136,8 +140,11 @@ Deno.serve(async (req) => {
     // CREATE
     // ─────────────────────────────────────────────────────────────────────────
     if (action === "create") {
-      if (!evolution_url || !evolution_api_key || !instance_name) {
-        throw new Error("Campos obrigatórios: evolution_url, evolution_api_key, instance_name");
+      // Prefer env vars (centralized); request params allowed as override for legacy callers
+      const evoUrl = EVOLUTION_API_URL_ENV || evolution_url || "";
+      const evoKey = EVOLUTION_API_KEY_ENV || evolution_api_key || "";
+      if (!evoUrl || !evoKey) {
+        throw new Error("Evolution API não configurada. Defina EVOLUTION_API_URL e EVOLUTION_API_KEY nos secrets.");
       }
 
       // Look up admin tenant_id for proper scoping
@@ -148,16 +155,33 @@ Deno.serve(async (req) => {
         .single();
       const tenantId = adminProfile?.tenant_id || null;
 
+      // Auto-generate instance_name from tenant slug + timestamp if not explicitly provided
+      let finalInstanceName = instance_name || "";
+      if (!finalInstanceName) {
+        let slug = "tenant";
+        if (tenantId) {
+          const { data: tenantRow } = await adminClient
+            .from("tenants")
+            .select("slug")
+            .eq("id", tenantId)
+            .single();
+          if (tenantRow?.slug) slug = tenantRow.slug.replace(/[^a-z0-9]/gi, "").toLowerCase();
+        }
+        finalInstanceName = `${slug}-${Date.now().toString(36)}`;
+      }
+
+      console.log(`Creating instance: ${finalInstanceName} for tenant: ${tenantId}`);
+
       // ── Step 1: Create on Evolution API (best-effort) ──
       let evolutionOk = false;
       let evolutionWarning: string | null = null;
 
       try {
-        const createRes = await fetch(`${evolution_url}/instance/create`, {
+        const createRes = await fetch(`${evoUrl}/instance/create`, {
           method: "POST",
-          headers: { "Content-Type": "application/json", apikey: evolution_api_key },
+          headers: { "Content-Type": "application/json", apikey: evoKey },
           body: JSON.stringify({
-            instanceName: instance_name,
+            instanceName: finalInstanceName,
             integration: "WHATSAPP-BAILEYS",
             qrcode: true,
             rejectCall: false,
@@ -182,7 +206,7 @@ Deno.serve(async (req) => {
 
       // ── Step 2: Register webhook (best-effort) ──
       if (evolutionOk) {
-        await registerWebhook(evolution_url, evolution_api_key, instance_name, supabaseUrl);
+        await registerWebhook(evoUrl, evoKey, finalInstanceName, supabaseUrl);
       }
 
       // ── Step 3: Check connection state (best-effort) ──
@@ -190,8 +214,8 @@ Deno.serve(async (req) => {
       if (evolutionOk) {
         try {
           const stateRes = await fetch(
-            `${evolution_url}/instance/connectionState/${instance_name}`,
-            { headers: { apikey: evolution_api_key }, signal: AbortSignal.timeout(8000) }
+            `${evoUrl}/instance/connectionState/${finalInstanceName}`,
+            { headers: { apikey: evoKey }, signal: AbortSignal.timeout(8000) }
           );
           if (stateRes.ok) {
             const stateData = await stateRes.json();
@@ -202,23 +226,24 @@ Deno.serve(async (req) => {
         } catch (_) { /* keep "connecting" */ }
       }
 
-      // ── Step 4: Save to DB (insert or update) ──
+      // ── Step 4: Save to DB (insert or update, scoped to tenant) ──
       const instanceStatus = evolutionOk ? initialStatus : "disconnected";
       const payload = buildInstancePayload({
-        evolution_url,
-        evolution_api_key,
-        instance_name,
-        name: name || instance_name,
+        evolution_url: evoUrl,
+        evolution_api_key: evoKey,
+        instance_name: finalInstanceName,
+        name: name || finalInstanceName,
         status: instanceStatus,
         tenant_id: tenantId,
       });
 
-      // Check for existing record with same instance_name
-      const { data: existing } = await adminClient
+      // Scope existing-instance lookup to tenant to respect multi-tenant isolation
+      let existingQuery = adminClient
         .from("whatsapp_instances")
         .select("id")
-        .eq("instance_name", instance_name)
-        .maybeSingle();
+        .eq("instance_name", finalInstanceName);
+      if (tenantId) existingQuery = existingQuery.eq("tenant_id", tenantId);
+      const { data: existing } = await existingQuery.maybeSingle();
 
       let saved: any;
       let saveErr: any;

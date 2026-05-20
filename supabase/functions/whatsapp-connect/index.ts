@@ -5,9 +5,9 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const EVOLUTION_URL = "https://api.flashcrms.com.br";
-const EVOLUTION_API_KEY = "bigodao77chave";
-const INSTANCE_NAME = "bigodao77";
+const EVOLUTION_URL = Deno.env.get("EVOLUTION_API_URL") || "";
+const EVOLUTION_API_KEY = Deno.env.get("EVOLUTION_API_KEY") || "";
+const INSTANCE_NAME = Deno.env.get("EVOLUTION_INSTANCE_NAME") || "default";
 const STALE_INSTANCE_MAX_AGE_MS = 10 * 60 * 1000;
 
 type ConnectionStateResponse = {
