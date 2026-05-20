@@ -334,7 +334,7 @@ function ChatList({
                 selectedId === chat.id ? 'bg-primary/5 border-l-2 border-primary' : ''
               }`}
             >
-              <button onClick={() => onSelect(chat.id)} className="flex items-center gap-3 flex-1 min-w-0 text-left">
+              <button onClick={() => { console.log('[ChatList] click →', chat.id); onSelect(chat.id); }} className="flex items-center gap-3 flex-1 min-w-0 text-left">
                 <Avatar className="h-11 w-11 shrink-0">
                   {chat.profile_picture_url && <AvatarImage src={chat.profile_picture_url} alt={getDisplayName(chat)} />}
                   <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">
@@ -895,8 +895,15 @@ export default function ConversationsPage() {
 
   const selectedChat = chats?.find((c) => c.id === selectedChatId);
 
+  // DEBUG: track state changes
+  useEffect(() => {
+    console.log('[ConversationsPage] selectedChatId=', selectedChatId, '→ selectedChat=', selectedChat?.id ?? null, 'chats.length=', chats?.length ?? 0);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedChatId, chats?.length]);
+
   // Close AI panel when switching chats so it doesn't carry stale context
   const handleSelectChat = (id: string) => {
+    console.log('[handleSelectChat] id=', id, 'chats.length=', chats?.length ?? 0, 'chats ids=', chats?.map(c => c.id));
     setSelectedChatId(id);
     setAiPanelOpen(false);
   };
@@ -908,6 +915,8 @@ export default function ConversationsPage() {
       </div>
     );
   }
+
+  console.log('[render] selectedChatId=', selectedChatId, 'selectedChat=', !!selectedChat, 'chats.length=', chats?.length ?? 0);
 
   return (
     <div className="h-[calc(100vh-4rem)] flex overflow-hidden rounded-xl border border-border bg-background">
