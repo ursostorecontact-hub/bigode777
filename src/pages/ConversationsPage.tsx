@@ -16,7 +16,7 @@ import { Label } from '@/components/ui/label';
 import {
   MessageSquare, Send, Loader2, Search, Phone, ArrowLeft,
   Check, CheckCheck, Clock, Mic, MicOff, UserPlus, Paperclip,
-  Image as ImageIcon, Video, FileText, X, Trash2, Tag, Settings2, Sparkles,
+  Image as ImageIcon, Video, FileText, X, Trash2, Tag, Settings2, Sparkles, Users,
 } from 'lucide-react';
 import { AISalesPanel } from '@/components/AISalesPanel';
 import {
@@ -327,7 +327,9 @@ function ChatList({
             <p className="text-xs text-muted-foreground mt-1">As mensagens recebidas pelo WhatsApp aparecerão aqui</p>
           </div>
         ) : (
-          filtered.map((chat) => (
+          filtered.map((chat) => {
+            const isGroup = (chat.remote_jid || '').endsWith('@g.us');
+            return (
             <div
               key={chat.id}
               className={`w-full flex items-center gap-3 p-3 text-left transition-colors hover:bg-muted/50 ${
@@ -337,8 +339,8 @@ function ChatList({
               <button onClick={() => { console.log('[ChatList] click →', chat.id); onSelect(chat.id); }} className="flex items-center gap-3 flex-1 min-w-0 text-left">
                 <Avatar className="h-11 w-11 shrink-0">
                   {chat.profile_picture_url && <AvatarImage src={chat.profile_picture_url} alt={getDisplayName(chat)} />}
-                  <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">
-                    {initials(getDisplayName(chat))}
+                  <AvatarFallback className={`text-xs font-bold ${isGroup ? 'bg-blue-500/10 text-blue-600' : 'bg-primary/10 text-primary'}`}>
+                    {isGroup ? <Users className="h-5 w-5" /> : initials(getDisplayName(chat))}
                   </AvatarFallback>
                 </Avatar>
                 <div className="flex-1 min-w-0">
@@ -379,7 +381,8 @@ function ChatList({
                 </Button>
               </LabelAssignPopover>
             </div>
-          ))
+          );
+          })
         )}
       </ScrollArea>
     </div>
@@ -523,6 +526,7 @@ function MessageArea({
 
   const contactName = getDisplayName(chat);
   const contactPhone = chat?.contact_phone || '';
+  const isGroup = (chat?.remote_jid || '').endsWith('@g.us');
 
   const aiMessages = (messages ?? [])
     .filter((m) => m.content?.trim())
@@ -540,13 +544,18 @@ function MessageArea({
         </Button>
         <Avatar className="h-10 w-10">
           {chat?.profile_picture_url && <AvatarImage src={chat.profile_picture_url} alt={contactName} />}
-          <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">
-            {initials(contactName)}
+          <AvatarFallback className={`text-xs font-bold ${isGroup ? 'bg-blue-500/10 text-blue-600' : 'bg-primary/10 text-primary'}`}>
+            {isGroup ? <Users className="h-4 w-4" /> : initials(contactName)}
           </AvatarFallback>
         </Avatar>
         <div className="flex-1 min-w-0">
-          <p className="font-semibold text-sm text-foreground truncate">{contactName}</p>
-          {contactPhone && (
+          <div className="flex items-center gap-1.5">
+            <p className="font-semibold text-sm text-foreground truncate">{contactName}</p>
+            {isGroup && (
+              <Badge variant="secondary" className="text-[10px] h-4 px-1 shrink-0">Grupo</Badge>
+            )}
+          </div>
+          {!isGroup && contactPhone && (
             <p className="text-xs text-muted-foreground">+{contactPhone}</p>
           )}
         </div>
@@ -623,6 +632,12 @@ function MessageArea({
                             : 'bg-muted text-foreground rounded-bl-md'
                         } ${(msg as any).deleted_at ? 'opacity-60 italic' : ''}`}
                       >
+                      {/* Sender name in group chats (received messages only) */}
+                      {isGroup && !msg.from_me && (msg as any).sender_name && (
+                        <p className="text-[10px] font-semibold text-primary mb-0.5">
+                          {(msg as any).sender_name}
+                        </p>
+                      )}
                       {(msg as any).deleted_at ? (
                           <div>
                             <p className="text-[10px] text-destructive/70 mb-0.5 flex items-center gap-1">

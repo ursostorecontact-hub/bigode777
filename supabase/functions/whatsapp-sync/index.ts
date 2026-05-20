@@ -29,6 +29,12 @@ function normalizeJid(jid: string): string {
   return jid;
 }
 
+// Valid WhatsApp JIDs must end with a recognized suffix.
+// Evolution internal IDs (e.g. "cmo7tr8ex6nzdp34j44v4o16b") have no suffix — reject them.
+function isValidJid(jid: string): boolean {
+  return jid.endsWith("@s.whatsapp.net") || jid.endsWith("@g.us") || jid.endsWith("@lid");
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -183,18 +189,18 @@ Deno.serve(async (req) => {
         // Normalize @lid -> @s.whatsapp.net to prevent duplicate rows for the same contact.
         const remoteJid = normalizeJid(chat.remoteJid || "");
 
-        // Only sync individual WhatsApp contacts (@s.whatsapp.net)
-        // Skip groups (@g.us), broadcasts, and internal IDs without @
-        if (!remoteJid || !remoteJid.includes("@") || remoteJid.includes("@g.us") || remoteJid === "status@broadcast") {
+        // Skip invalid JIDs (Evolution internal IDs without @ suffix) and status broadcasts
+        if (!isValidJid(remoteJid) || remoteJid === "status@broadcast") {
           continue;
         }
 
-        // Try to get the phone number from remoteJidAlt or remoteJid
-        const altJid = normalizeJid(chat.lastMessage?.key?.remoteJidAlt || "");
-        const phoneJid = altJid.includes("@s.whatsapp.net") ? altJid : remoteJid;
-        const contactPhone = phoneJid.split("@")[0];
-        // Resolve name: address book > pushName > chat name > phone
-        const contactName = contactMap[remoteJid] || contactMap[contactPhone] || chat.pushName || chat.name || chat.contact || contactPhone;
+        const isGroup = remoteJid.endsWith("@g.us");
+        const contactPhone = remoteJid.split("@")[0];
+
+        // Resolve name: for groups use subject/name; for contacts use address book > pushName
+        const contactName = isGroup
+          ? (chat.name || chat.subject || chat.pushName || contactPhone)
+          : (contactMap[remoteJid] || contactMap[contactPhone] || chat.pushName || chat.name || chat.contact || contactPhone);
 
         // Upsert chat — tenant_id must be set so RLS lets the row be visible
         const { data: dbChat, error: chatErr } = await supabase
@@ -224,8 +230,8 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        // Auto-assign seller if chat has no assigned_to
-        if (!dbChat.assigned_to) {
+        // Auto-assign seller for individual chats only (not groups)
+        if (!dbChat.assigned_to && !isGroup) {
           const { data: assignments } = await supabase
             .from("whatsapp_assignments")
             .select("*")
@@ -306,6 +312,9 @@ Deno.serve(async (req) => {
               const key = msg.key || {};
               const messageId = key.id || msg.id || "";
               const fromMe = key.fromMe ?? false;
+              // For group messages, participant is the actual sender JID
+              const msgSenderJid = isGroup ? normalizeJid(key.participant || "") : null;
+              const msgSenderName = isGroup ? (msg.pushName || null) : null;
 
               if (!messageId) continue;
 
@@ -366,6 +375,8 @@ Deno.serve(async (req) => {
                 status: fromMe ? "sent" : "received",
                 evolution_message_id: messageId,
                 created_at: timestamp,
+                sender_name: msgSenderName,
+                sender_jid: msgSenderJid,
               });
 
               syncedMessages++;

@@ -18,11 +18,11 @@
 // ──────────────────────────────────────────────
 // CONFIGURE AQUI
 // ──────────────────────────────────────────────
-const EVOLUTION_URL     = 'http://localhost:64644';
+const EVOLUTION_URL     = 'http://76.13.230.7:64644';
 const EVOLUTION_API_KEY = 'bigodao77chave';
 const INSTANCE_NAME     = 'nova-empresa-pro';
 
-const SUPABASE_URL          = 'https://wdgmmmbctqrubrxnmtsf.supabase.co';
+const SUPABASE_URL          = 'https://xtpczrmbracrvxtppyld.supabase.co';
 const SUPABASE_SERVICE_KEY  = process.env.SUPABASE_SERVICE_KEY || '';  // passe via env
 const TENANT_ID             = '0c1ee0e7-205d-44ac-b19e-c1a66ae14df4';
 // ──────────────────────────────────────────────
@@ -39,6 +39,12 @@ const MESSAGES_PER_CHAT = 200; // máximo por conversa — ajuste se necessário
 const BATCH_SIZE = 50;         // inserts em lote para o Supabase
 
 // ── helpers ──
+
+// Valid WhatsApp JIDs end with a recognized suffix.
+// Evolution internal IDs (e.g. "cmo7tr8ex6nzdp34j44v4o16b") have no suffix — skip them.
+function isValidJid(jid) {
+  return jid.endsWith('@s.whatsapp.net') || jid.endsWith('@g.us') || jid.endsWith('@lid');
+}
 
 async function evo(path, opts = {}) {
   const res = await fetch(`${EVOLUTION_URL}${path}`, {
@@ -126,13 +132,13 @@ async function main() {
     process.exit(1);
   }
 
-  // Filtrar apenas contatos individuais (não grupos, não broadcasts)
+  // Filtrar apenas JIDs válidos (exclui IDs internos do Evolution sem sufixo @ e status@broadcast)
   chats = chats.filter(c => {
     const jid = c.remoteJid || '';
-    return jid.includes('@') && !jid.includes('@g.us') && jid !== 'status@broadcast';
+    return isValidJid(jid) && jid !== 'status@broadcast';
   });
 
-  console.log(`   ${chats.length} conversas individuais encontradas\n`);
+  console.log(`   ${chats.length} conversas encontradas (individuais + grupos)\n`);
 
   let totalMessages = 0;
   let totalChats    = 0;
@@ -140,9 +146,13 @@ async function main() {
 
   for (let i = 0; i < chats.length; i++) {
     const chat = chats[i];
-    const remoteJid   = chat.remoteJid || '';
+    const remoteJid    = chat.remoteJid || '';
+    const isGroup      = remoteJid.endsWith('@g.us');
     const contactPhone = remoteJid.split('@')[0];
-    const contactName  = chat.pushName || chat.name || contactPhone;
+    // For groups: use subject/name; for contacts: pushName > name > phone
+    const contactName  = isGroup
+      ? (chat.name || chat.subject || chat.pushName || contactPhone)
+      : (chat.pushName || chat.name || contactPhone);
 
     process.stdout.write(`\r[${i + 1}/${chats.length}] ${remoteJid.slice(0, 40).padEnd(40)} | chats: ${totalChats} | msgs: ${totalMessages}`);
 
@@ -226,7 +236,10 @@ async function main() {
       const messageId = key.id || msg.id || '';
       if (!messageId || existingIds.has(messageId)) continue;
 
-      const fromMe  = key.fromMe ?? false;
+      const fromMe     = key.fromMe ?? false;
+      // For group messages, participant is the actual sender JID
+      const senderJid  = isGroup ? (key.participant || null) : null;
+      const senderName = isGroup ? (msg.pushName || null) : null;
       const { content, messageType, mediaUrl } = extractContent(msg);
       const ts = Number(msg.messageTimestamp);
       const createdAt = ts >= SINCE_TS ? new Date(ts * 1000).toISOString() : new Date().toISOString();
@@ -242,6 +255,8 @@ async function main() {
         status: fromMe ? 'sent' : 'received',
         evolution_message_id: messageId,
         created_at: createdAt,
+        sender_name: senderName,
+        sender_jid: senderJid,
       });
     }
 

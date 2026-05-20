@@ -22,6 +22,12 @@ function normalizeJid(jid: string): string {
   return jid;
 }
 
+// Valid WhatsApp JIDs must have a recognized suffix.
+// Evolution internal IDs (e.g. "cmo7tr8ex6nzdp34j44v4o16b") have no suffix — reject them.
+function isValidJid(jid: string): boolean {
+  return jid.endsWith("@s.whatsapp.net") || jid.endsWith("@g.us") || jid.endsWith("@lid");
+}
+
 // Download media from Evolution API and upload to Supabase storage
 async function downloadAndStoreMedia(
   supabase: any,
@@ -158,10 +164,17 @@ Deno.serve(async (req) => {
         const fromMe = key.fromMe ?? false;
         const messageId = key.id || msg.id || "";
 
-        console.log("Processing message:", JSON.stringify({ remoteJid, fromMe, messageId }).slice(0, 200));
+        // Group message metadata
+        const isGroup = remoteJid.endsWith("@g.us");
+        // For group msgs, participant is the actual sender; for 1-on-1 it's empty
+        const senderJid = isGroup ? normalizeJid(key.participant || "") : null;
+        // pushName is the sender's display name in all cases
+        const senderName = isGroup ? (msg.pushName || null) : null;
 
-        // Skip status broadcasts and groups
-        if (remoteJid === "status@broadcast" || remoteJid.includes("@g.us")) {
+        console.log("Processing message:", JSON.stringify({ remoteJid, fromMe, messageId, isGroup }).slice(0, 200));
+
+        // Skip invalid JIDs (Evolution internal IDs without @ suffix) and status broadcasts
+        if (!isValidJid(remoteJid) || remoteJid === "status@broadcast") {
           continue;
         }
 
@@ -215,8 +228,12 @@ Deno.serve(async (req) => {
           }
         }
 
-        const contactName = msg.pushName || remoteJid.split("@")[0];
+        // For groups: contact_name = group subject (or JID part as fallback, sync will update later)
+        //             pushName is the SENDER, not the group name
         const contactPhone = remoteJid.split("@")[0];
+        const contactName = isGroup
+          ? (msg.message?.groupMetadata?.subject || contactPhone)
+          : (msg.pushName || contactPhone);
 
         // Fetch profile picture
         let profilePicUrl: string | null = null;
@@ -247,7 +264,8 @@ Deno.serve(async (req) => {
           last_message_at: new Date().toISOString(),
           tenant_id: instance.tenant_id,
         };
-        if (!fromMe) upsertData.contact_name = contactName;
+        // Always set group name; for individual contacts only set on incoming (pushName)
+        if (!fromMe || isGroup) upsertData.contact_name = contactName;
         if (profilePicUrl) upsertData.profile_picture_url = profilePicUrl;
 
         const { data: chat, error: chatError } = await supabase
@@ -272,7 +290,7 @@ Deno.serve(async (req) => {
                 last_message: content,
                 last_message_at: new Date().toISOString(),
                 unread_count: fromMe ? 0 : (existingChat.unread_count || 0) + 1,
-                ...(fromMe ? {} : { contact_name: contactName }),
+                ...(!fromMe || isGroup ? { contact_name: contactName } : {}),
               })
               .eq("id", existingChat.id);
 
@@ -286,6 +304,8 @@ Deno.serve(async (req) => {
               status: fromMe ? "sent" : "received",
               evolution_message_id: messageId,
               tenant_id: instance.tenant_id,
+              sender_name: senderName,
+              sender_jid: senderJid,
             });
           }
         } else if (chat) {
@@ -298,8 +318,8 @@ Deno.serve(async (req) => {
               .eq("id", chat.id);
           }
 
-          // Auto-create lead if new contact
-          if (!fromMe) {
+          // Auto-create lead only for individual contacts (not groups)
+          if (!fromMe && !isGroup) {
             const tenantId = instance.tenant_id || null;
 
             let leadQuery = supabase
@@ -405,6 +425,8 @@ Deno.serve(async (req) => {
             status: fromMe ? "sent" : "received",
             evolution_message_id: messageId,
             tenant_id: instance.tenant_id,
+            sender_name: senderName,
+            sender_jid: senderJid,
           });
         }
       }
