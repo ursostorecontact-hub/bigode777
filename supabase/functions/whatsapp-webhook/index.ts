@@ -347,6 +347,7 @@ Deno.serve(async (req) => {
                   notes: `Primeira mensagem: ${content}`,
                   status: "novo",
                   pipeline_stage: "novo",
+                  whatsapp_instance_id: instance.id,
                 };
                 if (tenantId) newLead.tenant_id = tenantId;
 

@@ -12,11 +12,15 @@ import { supabase } from '@/integrations/supabase/client';
 import { useWhatsAppInstances } from '@/hooks/use-integrations';
 import { useTenant } from '@/contexts/TenantContext';
 import { useToast } from '@/hooks/use-toast';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
-async function callWhatsAppQrcode(body: Record<string, unknown>) {
+async function callEdgeFn(fn: string, body: Record<string, unknown>) {
   const { data: { session } } = await supabase.auth.getSession();
   const res = await fetch(
-    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/whatsapp-qrcode`,
+    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${fn}`,
     {
       method: 'POST',
       headers: {
@@ -28,6 +32,8 @@ async function callWhatsAppQrcode(body: Record<string, unknown>) {
   );
   return res.json();
 }
+
+const callWhatsAppQrcode = (body: Record<string, unknown>) => callEdgeFn('whatsapp-qrcode', body);
 
 export function WhatsAppSettingsSection() {
   const { toast } = useToast();
@@ -41,6 +47,7 @@ export function WhatsAppSettingsSection() {
 
   const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [qrCode, setQrCode] = useState<string | null>(null);
   const [qrLoading, setQrLoading] = useState(false);
   const [status, setStatus] = useState<string>('disconnected');
@@ -165,16 +172,18 @@ export function WhatsAppSettingsSection() {
   };
 
   const handleDelete = async () => {
-    if (!tenantInstance || !confirm('Desconectar e remover a instância do WhatsApp?')) return;
+    if (!tenantInstance) return;
+    setShowDeleteConfirm(false);
     setDeleting(true);
     try {
-      await callWhatsAppQrcode({ action: 'delete', instance_id: tenantInstance.id });
+      const result = await callEdgeFn('whatsapp-delete-instance', { instance_id: tenantInstance.id });
+      if (result.error) throw new Error(result.error);
       setStatus('disconnected');
       setQrCode(null);
       refetch();
-      toast({ title: 'WhatsApp desconectado' });
+      toast({ title: 'WhatsApp removido', description: 'Conversas e mensagens apagadas.' });
     } catch (err: any) {
-      toast({ title: 'Erro', description: err.message, variant: 'destructive' });
+      toast({ title: 'Erro ao remover', description: err.message, variant: 'destructive' });
     }
     setDeleting(false);
   };
@@ -266,7 +275,7 @@ export function WhatsAppSettingsSection() {
               {activatingWebhook ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
               Ativar Webhook
             </Button>
-            <Button variant="ghost" size="icon" onClick={handleDelete} disabled={deleting} className="text-muted-foreground hover:text-destructive h-8 w-8">
+            <Button variant="ghost" size="icon" onClick={() => setShowDeleteConfirm(true)} disabled={deleting} className="text-muted-foreground hover:text-destructive h-8 w-8">
               {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
             </Button>
           </div>
@@ -359,6 +368,27 @@ export function WhatsAppSettingsSection() {
           </div>
         </CardContent>
       )}
+
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover WhatsApp da empresa?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Isso vai apagar <strong>permanentemente</strong> todas as conversas, mensagens e
+              leads importados por este número. Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+            >
+              Sim, remover tudo
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }
