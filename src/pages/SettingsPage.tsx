@@ -7,6 +7,10 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Building2, Users, Link, Key, Loader2, UserPlus, Trash2, Smartphone, KeyRound, RefreshCw, Sparkles, Clock } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
@@ -58,11 +62,44 @@ function AiSettingsSection() {
   const [escalationKeywords, setEscalationKeywords] = useState('reclamação, cancelar, reembolso, devolução, procon');
   const [saving, setSaving] = useState(false);
 
+  useEffect(() => {
+    supabase.from('ai_settings').select('*').maybeSingle().then(({ data }) => {
+      if (data) {
+        setAiEnabled(data.ai_enabled ?? false);
+        setAiMode(data.ai_mode ?? 'suggestion');
+        setCustomPersonality(data.custom_personality ?? '');
+        setWorkStart(data.work_start ?? '08:00');
+        setWorkEnd(data.work_end ?? '18:00');
+        setEscalationKeywords(data.escalation_keywords ?? 'reclamação, cancelar, reembolso, devolução, procon');
+      }
+    });
+  }, []);
+
   const handleSave = async () => {
     setSaving(true);
     try {
-      const config = { aiEnabled, aiMode, customPersonality, workStart, workEnd, escalationKeywords };
-      await supabase.from('settings').upsert([{ key: 'ai_sales_config', value: JSON.stringify(config) }]);
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .single();
+
+      const tenantId = profile?.tenant_id;
+      if (!tenantId) throw new Error('Tenant não encontrado');
+
+      const { error } = await supabase.from('ai_settings').upsert(
+        {
+          tenant_id: tenantId,
+          ai_enabled: aiEnabled,
+          ai_mode: aiMode,
+          custom_personality: customPersonality,
+          work_start: workStart,
+          work_end: workEnd,
+          escalation_keywords: escalationKeywords,
+        },
+        { onConflict: 'tenant_id' },
+      );
+
+      if (error) throw error;
       toast({ title: 'Configurações de IA salvas' });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Erro desconhecido';
@@ -161,7 +198,7 @@ export default function SettingsPage() {
   const { data: users, isLoading: usersLoading, refetch: refetchUsers } = useProfilesWithRoles();
   const updateSettings = useUpdateSettings();
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, role } = useAuth();
 
   const [companyName, setCompanyName] = useState('');
   const [webhookUrl, setWebhookUrl] = useState('');
@@ -180,6 +217,10 @@ export default function SettingsPage() {
   const [resetUserName, setResetUserName] = useState('');
   const [resetNewPassword, setResetNewPassword] = useState('');
   const [resettingPassword, setResettingPassword] = useState(false);
+
+  // Delete user confirmation state
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (settings) {
@@ -215,7 +256,6 @@ export default function SettingsPage() {
 
     setCreating(true);
     try {
-      // Call edge function to create user (needs service role)
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
 
@@ -271,22 +311,26 @@ export default function SettingsPage() {
     }
   };
 
-  const handleDeleteUser = async (userId: string, userName: string) => {
-    if (!confirm(`Tem certeza que deseja remover "${userName}"? Esta ação não pode ser desfeita.`)) return;
+  const handleDeleteUser = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-user`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ user_id: userId }),
+        body: JSON.stringify({ user_id: deleteTarget.id }),
       });
       const result = await res.json();
       if (!res.ok) throw new Error(result.error);
       toast({ title: 'Usuário removido com sucesso' });
+      setDeleteTarget(null);
       refetchUsers();
     } catch (err: any) {
       toast({ title: 'Erro ao remover', description: err.message, variant: 'destructive' });
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -393,15 +437,17 @@ export default function SettingsPage() {
                         >
                           <KeyRound className="h-4 w-4" />
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
-                          onClick={() => handleDeleteUser(member.id, member.full_name)}
-                          aria-label="Remover usuário"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        {role === 'admin' && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
+                            onClick={() => setDeleteTarget({ id: member.id, name: member.full_name })}
+                            aria-label="Remover usuário"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
                       </>
                     ) : null}
                     <span className={`text-xs font-medium ${member.active ? 'text-green-600' : 'text-destructive'}`}>
@@ -449,7 +495,7 @@ export default function SettingsPage() {
       {/* AI Settings */}
       <AiSettingsSection />
 
-      {/* Dialog para criar novo usuário */}
+      {/* Dialog: novo usuário */}
       <Dialog open={showNewUser} onOpenChange={setShowNewUser}>
         <DialogContent>
           <DialogHeader>
@@ -499,7 +545,7 @@ export default function SettingsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Dialog para redefinir senha */}
+      {/* Dialog: redefinir senha */}
       <Dialog open={showResetPassword} onOpenChange={setShowResetPassword}>
         <DialogContent>
           <DialogHeader>
@@ -527,6 +573,29 @@ export default function SettingsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* AlertDialog: confirmar remoção de usuário */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && !deleting && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover usuário?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja remover <strong>{deleteTarget?.name}</strong>? Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={handleDeleteUser}
+              disabled={deleting}
+            >
+              {deleting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Remover
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

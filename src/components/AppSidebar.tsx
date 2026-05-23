@@ -44,7 +44,7 @@ const mainNav = [
   { title: 'Leads', url: '/leads', icon: Users },
   { title: 'Tarefas', url: '/tarefas', icon: CheckSquare },
   { title: 'Pipeline', url: '/pipeline', icon: Kanban, roles: ['admin', 'manager'] },
-  { title: 'Catálogo', url: '/catalogo', icon: ShoppingBag, roles: ['admin', 'manager'] },
+  { title: 'Catálogo', url: '/catalogo', icon: ShoppingBag },
   { title: 'Clientes', url: '/clientes', icon: UserCheck, roles: ['admin', 'manager'] },
   { title: 'Distribuição', url: '/distribuicao', icon: Share2, roles: ['admin', 'manager'] },
   { title: 'Relatórios', url: '/relatorios', icon: BarChart3, roles: ['admin', 'manager'] },

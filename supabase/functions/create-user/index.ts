@@ -26,18 +26,27 @@ Deno.serve(async (req) => {
 
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
-    // Check admin role
-    const { data: roleData } = await adminClient
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", caller.id)
-      .single();
+    // Check if caller is super_admin (query table directly — service_role has no auth.uid())
+    const { data: callerSuperAdminRow } = await adminClient
+      .from("super_admins")
+      .select("id")
+      .eq("email", caller.email!)
+      .maybeSingle();
+    const callerIsSuperAdmin = !!callerSuperAdminRow;
 
-    if (!roleData || roleData.role !== "admin") {
-      throw new Error("Apenas administradores podem criar usuários");
+    // Only admin, manager, or super_admin can create users
+    if (!callerIsSuperAdmin) {
+      const { data: roleData } = await adminClient
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", caller.id)
+        .single();
+      if (!roleData || !["admin", "manager"].includes(roleData.role)) {
+        throw new Error("Apenas administradores e gerentes podem criar usuários");
+      }
     }
 
-    // Get caller's tenant
+    // Get caller's tenant membership
     const { data: callerMembership } = await adminClient
       .from("tenant_members")
       .select("tenant_id")
@@ -45,9 +54,15 @@ Deno.serve(async (req) => {
       .limit(1)
       .single();
 
-    const { email, password, full_name, role } = await req.json();
+    const { email, password, full_name, role, tenant_id: bodyTenantId } = await req.json();
     if (!email || !password || !full_name) {
       throw new Error("Campos obrigatórios: email, password, full_name");
+    }
+
+    // Determine target tenant: caller's tenant, super_admin can override
+    let tenantId: string | null = callerMembership?.tenant_id ?? null;
+    if (callerIsSuperAdmin && bodyTenantId) {
+      tenantId = bodyTenantId;
     }
 
     // Create user
@@ -63,7 +78,7 @@ Deno.serve(async (req) => {
 
     const newUserId = newUser.user.id;
 
-    // Update role if not default
+    // Set role if not default salesperson
     if (role && role !== "salesperson") {
       await adminClient
         .from("user_roles")
@@ -71,24 +86,16 @@ Deno.serve(async (req) => {
         .eq("user_id", newUserId);
     }
 
-    // Associate new user with caller's tenant
-    if (callerMembership?.tenant_id) {
-      const tenantId = callerMembership.tenant_id;
-
-      // Update profile tenant_id
+    // Associate new user with tenant
+    if (tenantId) {
       await adminClient
         .from("profiles")
         .update({ tenant_id: tenantId })
         .eq("id", newUserId);
 
-      // Add to tenant_members
       await adminClient
         .from("tenant_members")
-        .insert({
-          tenant_id: tenantId,
-          user_id: newUserId,
-          role: "member",
-        });
+        .insert({ tenant_id: tenantId, user_id: newUserId, role: "member" });
     }
 
     return new Response(JSON.stringify({ id: newUserId }), {

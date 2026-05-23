@@ -27,6 +27,7 @@ import {
   Product, ProductFilters,
 } from '@/hooks/use-catalog';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -151,21 +152,24 @@ interface ProductRowProps {
   onSelect: (id: string, checked: boolean) => void;
   onEdit: (product: Product) => void;
   onDelete: (id: string) => void;
+  isReadOnly: boolean;
 }
 
-function ProductRow({ product, selected, onSelect, onEdit, onDelete }: ProductRowProps) {
+function ProductRow({ product, selected, onSelect, onEdit, onDelete, isReadOnly }: ProductRowProps) {
   const cover = product.images?.[0];
   return (
     <div className={cn(
       'flex items-center gap-3 px-3 py-2.5 rounded-lg border hover:bg-muted/30 transition-colors',
       selected && 'bg-primary/5 border-primary/20',
     )}>
-      <button type="button" onClick={() => onSelect(product.id, !selected)}
-        className="shrink-0 text-muted-foreground hover:text-foreground">
-        {selected
-          ? <CheckSquare className="h-4 w-4 text-primary" />
-          : <Square className="h-4 w-4" />}
-      </button>
+      {!isReadOnly && (
+        <button type="button" onClick={() => onSelect(product.id, !selected)}
+          className="shrink-0 text-muted-foreground hover:text-foreground">
+          {selected
+            ? <CheckSquare className="h-4 w-4 text-primary" />
+            : <Square className="h-4 w-4" />}
+        </button>
+      )}
 
       <div className="h-10 w-10 shrink-0 rounded-md overflow-hidden bg-muted flex items-center justify-center">
         {cover
@@ -196,23 +200,25 @@ function ProductRow({ product, selected, onSelect, onEdit, onDelete }: ProductRo
         {product.is_active ? 'Ativo' : 'Inativo'}
       </Badge>
 
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
-            <MoreVertical className="h-4 w-4" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem onClick={() => onEdit(product)}>
-            <Pencil className="h-4 w-4 mr-2" />Editar
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem className="text-destructive focus:text-destructive"
-            onClick={() => onDelete(product.id)}>
-            <Trash2 className="h-4 w-4 mr-2" />Remover
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      {!isReadOnly && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
+              <MoreVertical className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => onEdit(product)}>
+              <Pencil className="h-4 w-4 mr-2" />Editar
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem className="text-destructive focus:text-destructive"
+              onClick={() => onDelete(product.id)}>
+              <Trash2 className="h-4 w-4 mr-2" />Remover
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
     </div>
   );
 }
@@ -221,6 +227,8 @@ function ProductRow({ product, selected, onSelect, onEdit, onDelete }: ProductRo
 
 export default function CatalogPage() {
   const { toast } = useToast();
+  const { role } = useAuth();
+  const isReadOnly = !['admin', 'manager'].includes(role || '');
 
   const [filters, setFilters] = useState<ProductFilters>({
     sort_by: 'created_at', sort_dir: 'desc',
@@ -290,41 +298,49 @@ export default function CatalogPage() {
             <ShoppingBag className="h-6 w-6 text-primary" />
             Catálogo
           </h1>
-          <p className="text-muted-foreground text-sm mt-0.5">Gerencie seus produtos e categorias</p>
+          <p className="text-muted-foreground text-sm mt-0.5">
+            {isReadOnly ? 'Consulte produtos e categorias' : 'Gerencie seus produtos e categorias'}
+          </p>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          <Sheet open={catSheetOpen} onOpenChange={setCatSheetOpen}>
-            <SheetTrigger asChild>
-              <Button variant="outline" size="sm">
-                <Tag className="h-4 w-4 mr-1.5" />Categorias
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="right" className="w-96">
-              <SheetHeader><SheetTitle>Gerenciar categorias</SheetTitle></SheetHeader>
-              <div className="mt-4"><CategoryEditor /></div>
-            </SheetContent>
-          </Sheet>
+          {!isReadOnly && (
+            <Sheet open={catSheetOpen} onOpenChange={setCatSheetOpen}>
+              <SheetTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <Tag className="h-4 w-4 mr-1.5" />Categorias
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="right" className="w-96">
+                <SheetHeader><SheetTitle>Gerenciar categorias</SheetTitle></SheetHeader>
+                <div className="mt-4"><CategoryEditor /></div>
+              </SheetContent>
+            </Sheet>
+          )}
 
-          <Sheet open={importSheetOpen} onOpenChange={setImportSheetOpen}>
-            <SheetTrigger asChild>
-              <Button variant="outline" size="sm">
-                <Upload className="h-4 w-4 mr-1.5" />Importar CSV
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="right" className="w-96">
-              <SheetHeader><SheetTitle>Importar produtos via CSV</SheetTitle></SheetHeader>
-              <CsvImportPanel onClose={() => setImportSheetOpen(false)} />
-            </SheetContent>
-          </Sheet>
+          {!isReadOnly && (
+            <Sheet open={importSheetOpen} onOpenChange={setImportSheetOpen}>
+              <SheetTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <Upload className="h-4 w-4 mr-1.5" />Importar CSV
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="right" className="w-96">
+                <SheetHeader><SheetTitle>Importar produtos via CSV</SheetTitle></SheetHeader>
+                <CsvImportPanel onClose={() => setImportSheetOpen(false)} />
+              </SheetContent>
+            </Sheet>
+          )}
 
           <Button variant="outline" size="sm" onClick={exportCSV}>
             <Download className="h-4 w-4 mr-1.5" />Exportar
           </Button>
 
-          <Button onClick={openNew}>
-            <Plus className="h-4 w-4 mr-1.5" />Novo produto
-          </Button>
+          {!isReadOnly && (
+            <Button onClick={openNew}>
+              <Plus className="h-4 w-4 mr-1.5" />Novo produto
+            </Button>
+          )}
         </div>
       </div>
 
@@ -404,8 +420,8 @@ export default function CatalogPage() {
         </Select>
       </div>
 
-      {/* Bulk actions */}
-      {selected.size > 0 && (
+      {/* Bulk actions — only for admin/manager */}
+      {!isReadOnly && selected.size > 0 && (
         <div className="flex items-center gap-3 px-3 py-2 bg-primary/5 border border-primary/20 rounded-lg flex-wrap">
           <span className="text-sm font-medium">{selected.size} selecionado(s)</span>
           <Separator orientation="vertical" className="h-4" />
@@ -434,7 +450,7 @@ export default function CatalogPage() {
 
       {/* Product list */}
       <div className="space-y-2">
-        {products.length > 0 && (
+        {!isReadOnly && products.length > 0 && (
           <div className="flex items-center gap-3 px-3 pb-1">
             <button type="button" onClick={toggleAll} className="text-muted-foreground hover:text-foreground">
               {selected.size === products.length && products.length > 0
@@ -446,6 +462,12 @@ export default function CatalogPage() {
               {filters.search ? ` para "${filters.search}"` : ''}
             </span>
           </div>
+        )}
+        {isReadOnly && products.length > 0 && (
+          <p className="text-xs text-muted-foreground px-3 pb-1">
+            {products.length} produto(s)
+            {filters.search ? ` para "${filters.search}"` : ''}
+          </p>
         )}
 
         {isLoading ? (
@@ -466,7 +488,7 @@ export default function CatalogPage() {
                     : 'Comece criando seu primeiro produto'}
                 </p>
               </div>
-              {!filters.search && !filters.category_id && (filters.is_active === null || filters.is_active === undefined) && (
+              {!isReadOnly && !filters.search && !filters.category_id && (filters.is_active === null || filters.is_active === undefined) && (
                 <Button onClick={openNew}>
                   <Plus className="h-4 w-4 mr-2" />Criar produto
                 </Button>
@@ -482,16 +504,19 @@ export default function CatalogPage() {
               onSelect={toggleSelect}
               onEdit={openEdit}
               onDelete={setDeleteId}
+              isReadOnly={isReadOnly}
             />
           ))
         )}
       </div>
 
-      <ProductModal
-        open={modalOpen}
-        onClose={() => { setModalOpen(false); setEditingProduct(null); }}
-        product={editingProduct}
-      />
+      {!isReadOnly && (
+        <ProductModal
+          open={modalOpen}
+          onClose={() => { setModalOpen(false); setEditingProduct(null); }}
+          product={editingProduct}
+        />
+      )}
 
       <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
         <AlertDialogContent>

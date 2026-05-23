@@ -81,7 +81,7 @@ function AppRoutes() {
       <Route path="/conversas" element={<ProtectedRoute><ConversationsPage /></ProtectedRoute>} />
       <Route path="/tarefas" element={<ProtectedRoute><TasksPage /></ProtectedRoute>} />
       <Route path="/pipeline" element={<ProtectedRoute roles={['admin', 'manager']}><PipelinePage /></ProtectedRoute>} />
-      <Route path="/catalogo" element={<ProtectedRoute roles={['admin', 'manager']}><CatalogPage /></ProtectedRoute>} />
+      <Route path="/catalogo" element={<ProtectedRoute><CatalogPage /></ProtectedRoute>} />
       <Route path="/clientes" element={<ProtectedRoute roles={['admin', 'manager']}><ClientsPage /></ProtectedRoute>} />
       <Route path="/distribuicao" element={<ProtectedRoute roles={['admin', 'manager']}><DistributionPage /></ProtectedRoute>} />
       <Route path="/relatorios" element={<ProtectedRoute roles={['admin', 'manager']}><ReportsPage /></ProtectedRoute>} />

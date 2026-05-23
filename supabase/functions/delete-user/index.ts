@@ -10,9 +10,15 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  const json = (body: unknown, status = 200) =>
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+
   try {
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) throw new Error("Não autenticado");
+    if (!authHeader?.startsWith("Bearer ")) return json({ error: "Não autenticado" }, 401);
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -22,41 +28,108 @@ Deno.serve(async (req) => {
       global: { headers: { Authorization: authHeader } },
     });
     const { data: { user: caller } } = await callerClient.auth.getUser();
-    if (!caller) throw new Error("Não autenticado");
+    if (!caller) return json({ error: "Não autenticado" }, 401);
 
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
-    const { data: roleData } = await adminClient
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", caller.id)
-      .single();
 
-    if (!roleData || roleData.role !== "admin") {
-      throw new Error("Apenas administradores podem remover usuários");
+    // Check if caller is super_admin (query table directly — service_role has no auth.uid())
+    const { data: callerSuperAdminRow } = await adminClient
+      .from("super_admins")
+      .select("id")
+      .eq("email", caller.email!)
+      .maybeSingle();
+    const callerIsSuperAdmin = !!callerSuperAdminRow;
+
+    // Only admin (or super_admin) can delete users
+    if (!callerIsSuperAdmin) {
+      const { data: callerRole } = await adminClient
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", caller.id)
+        .single();
+      if (!callerRole || callerRole.role !== "admin") {
+        return json({ error: "Apenas administradores podem remover usuários" }, 403);
+      }
     }
 
     const { user_id } = await req.json();
-    if (!user_id) throw new Error("Campo obrigatório: user_id");
+    if (!user_id) return json({ error: "Campo obrigatório: user_id" }, 400);
 
+    // No self-delete
     if (user_id === caller.id) {
-      throw new Error("Você não pode remover a si mesmo");
+      return json({ error: "Você não pode remover a si mesmo" }, 400);
     }
 
-    // Delete profile and role first (cascade won't cover profile since no FK)
+    // Get caller's tenant
+    const { data: callerProfile } = await adminClient
+      .from("profiles")
+      .select("tenant_id")
+      .eq("id", caller.id)
+      .single();
+
+    // Get target's profile
+    const { data: targetProfile } = await adminClient
+      .from("profiles")
+      .select("tenant_id")
+      .eq("id", user_id)
+      .single();
+    if (!targetProfile) return json({ error: "Usuário não encontrado" }, 404);
+
+    // Tenant scope: non-super_admin can only delete users from their own tenant
+    if (!callerIsSuperAdmin && targetProfile.tenant_id !== callerProfile?.tenant_id) {
+      return json({ error: "Você só pode remover usuários do seu tenant" }, 403);
+    }
+
+    // Prevent deleting a super_admin
+    const { data: targetAuthResult } = await adminClient.auth.admin.getUserById(user_id);
+    const targetEmail = targetAuthResult.user?.email;
+    if (targetEmail) {
+      const { data: targetSuperAdminRow } = await adminClient
+        .from("super_admins")
+        .select("id")
+        .eq("email", targetEmail)
+        .maybeSingle();
+      if (targetSuperAdminRow) {
+        return json({ error: "Não é possível remover um super administrador" }, 403);
+      }
+    }
+
+    // Prevent deleting the last admin of a tenant
+    const { data: targetRoleRow } = await adminClient
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", user_id)
+      .single();
+
+    if (targetRoleRow?.role === "admin") {
+      const { data: tenantProfiles } = await adminClient
+        .from("profiles")
+        .select("id")
+        .eq("tenant_id", targetProfile.tenant_id);
+
+      const tenantUserIds = (tenantProfiles || []).map((p) => p.id);
+
+      const { count: adminCount } = await adminClient
+        .from("user_roles")
+        .select("*", { count: "exact", head: true })
+        .in("user_id", tenantUserIds)
+        .eq("role", "admin");
+
+      if ((adminCount || 0) <= 1) {
+        return json({ error: "Não é possível remover o último administrador do tenant" }, 400);
+      }
+    }
+
+    // Delete: profile and role first, then auth user
     await adminClient.from("user_roles").delete().eq("user_id", user_id);
     await adminClient.from("profiles").delete().eq("id", user_id);
 
-    // Delete auth user
-    const { error } = await adminClient.auth.admin.deleteUser(user_id);
-    if (error) throw error;
+    const { error: deleteError } = await adminClient.auth.admin.deleteUser(user_id);
+    if (deleteError) throw deleteError;
 
-    return new Response(JSON.stringify({ success: true }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return json({ success: true });
   } catch (err: any) {
-    return new Response(JSON.stringify({ error: err.message }), {
-      status: 400,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    console.error("delete-user error:", err.message);
+    return json({ error: err.message }, 500);
   }
 });
