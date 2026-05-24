@@ -49,6 +49,11 @@ function initials(name: string) {
   return name.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase();
 }
 
+function normalizeBase64(b64: string | null | undefined): string | null {
+  if (!b64) return null;
+  return b64.startsWith('data:') ? b64 : `data:image/png;base64,${b64}`;
+}
+
 // ── Seller Assignment Row ──
 
 function SellerRow({ profile, percentage, onChange, onRemove }: {
@@ -122,7 +127,201 @@ function PercentageSummary({ total, sellerCount }: { total: number; sellerCount:
   );
 }
 
+// ── QR Code Modal ──
+
+function QrCodeModal({ instanceId, instanceName, initialQrBase64, onConnected, onClose }: {
+  instanceId: string;
+  instanceName: string;
+  initialQrBase64: string | null;
+  onConnected: () => void;
+  onClose: () => void;
+}) {
+  const { toast } = useToast();
+  const [phase, setPhase] = useState<'connecting' | 'connected'>('connecting');
+  const [qrBase64, setQrBase64] = useState<string | null>(initialQrBase64);
+  const [countdown, setCountdown] = useState(60);
+  const [loading, setLoading] = useState(!initialQrBase64);
+
+  // Stable refs for callbacks and internal flags
+  const onConnectedRef = useRef(onConnected);
+  const onCloseRef = useRef(onClose);
+  onConnectedRef.current = onConnected;
+  onCloseRef.current = onClose;
+
+  const countdownTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const refreshingRef = useRef(false);
+  const countdownValRef = useRef(60);
+
+  const stopTimers = useCallback(() => {
+    if (countdownTimerRef.current) { clearInterval(countdownTimerRef.current); countdownTimerRef.current = null; }
+    if (pollTimerRef.current) { clearInterval(pollTimerRef.current); pollTimerRef.current = null; }
+  }, []);
+
+  const handleConnected = useCallback(() => {
+    stopTimers();
+    setPhase('connected');
+    onConnectedRef.current();
+  }, [stopTimers]);
+
+  const refreshQr = useCallback(async () => {
+    if (refreshingRef.current) return;
+    refreshingRef.current = true;
+    setLoading(true);
+    try {
+      const result = await callWhatsAppQrcode({ action: 'refresh_qr', instance_id: instanceId });
+      if (result.connected) {
+        handleConnected();
+        return;
+      }
+      if (result.qrcode_base64) {
+        setQrBase64(normalizeBase64(result.qrcode_base64 as string));
+        countdownValRef.current = 60;
+        setCountdown(60);
+      } else if (result.error) {
+        toast({ title: 'Erro ao atualizar QR', description: result.error, variant: 'destructive' });
+      }
+    } catch (err: any) {
+      toast({ title: 'Erro ao atualizar QR', description: err.message, variant: 'destructive' });
+    } finally {
+      setLoading(false);
+      refreshingRef.current = false;
+    }
+  }, [instanceId, handleConnected, toast]);
+
+  const checkStatus = useCallback(async () => {
+    try {
+      const result = await callWhatsAppQrcode({ action: 'check_status', instance_id: instanceId });
+      if (result.status === 'connected') {
+        handleConnected();
+      }
+    } catch {
+      // Polling errors are silent
+    }
+  }, [instanceId, handleConnected]);
+
+  // Fetch QR on mount if no initial QR was provided
+  useEffect(() => {
+    if (!initialQrBase64) {
+      refreshQr();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Countdown + polling timers while in connecting phase
+  useEffect(() => {
+    if (phase !== 'connecting') return;
+
+    countdownValRef.current = countdown;
+
+    countdownTimerRef.current = setInterval(() => {
+      countdownValRef.current -= 1;
+      setCountdown(countdownValRef.current);
+      if (countdownValRef.current <= 0) {
+        countdownValRef.current = 60;
+        setCountdown(60);
+        refreshQr();
+      }
+    }, 1000);
+
+    pollTimerRef.current = setInterval(checkStatus, 3000);
+
+    return () => stopTimers();
+    // Only re-run when phase changes; refreshQr/checkStatus/stopTimers are stable
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase]);
+
+  const handleClose = () => {
+    stopTimers();
+    onCloseRef.current();
+  };
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && handleClose()}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Smartphone className="h-5 w-5 text-primary" />
+            Conectar {instanceName}
+          </DialogTitle>
+        </DialogHeader>
+
+        {phase === 'connected' ? (
+          <div className="flex flex-col items-center gap-4 py-6">
+            <div className="p-4 rounded-full bg-green-100 dark:bg-green-900/30">
+              <CheckCircle2 className="h-12 w-12 text-green-600" />
+            </div>
+            <div className="text-center space-y-1">
+              <p className="font-semibold text-foreground text-lg">Conectado!</p>
+              <p className="text-sm text-muted-foreground">WhatsApp vinculado com sucesso.</p>
+            </div>
+            <Button onClick={handleClose} className="w-full">Fechar</Button>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center gap-4">
+            <p className="text-xs text-muted-foreground text-center leading-relaxed">
+              Abra o WhatsApp → Aparelhos conectados → Conectar aparelho → Escaneie o QR Code
+            </p>
+
+            {/* QR Code display */}
+            <div className="relative">
+              {loading && !qrBase64 ? (
+                <div className="w-52 h-52 rounded-xl bg-muted/40 flex items-center justify-center border border-dashed border-muted-foreground/20">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                </div>
+              ) : qrBase64 ? (
+                <div className="relative">
+                  <img
+                    src={qrBase64}
+                    alt="QR Code WhatsApp"
+                    className={`w-52 h-52 rounded-xl shadow-lg transition-opacity duration-200 ${loading ? 'opacity-40' : 'opacity-100'}`}
+                  />
+                  {loading && (
+                    <div className="absolute inset-0 flex items-center justify-center rounded-xl">
+                      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="w-52 h-52 rounded-xl bg-muted/40 flex items-center justify-center border border-dashed border-muted-foreground/20">
+                  <QrCode className="h-12 w-12 text-muted-foreground/30" />
+                </div>
+              )}
+            </div>
+
+            {/* Countdown bar */}
+            <div className="w-full space-y-1">
+              <div className="flex justify-between text-[10px] text-muted-foreground">
+                <span>QR expira em</span>
+                <span className={countdown <= 10 ? 'text-amber-500 font-bold' : ''}>{countdown}s</span>
+              </div>
+              <Progress value={(countdown / 60) * 100} className="h-1.5" />
+            </div>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={refreshQr}
+              disabled={loading}
+              className="gap-1.5"
+            >
+              {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+              Atualizar QR
+            </Button>
+
+            <p className="text-[11px] text-muted-foreground/70 text-center">
+              Verificando conexão automaticamente...
+            </p>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ── Instance Card ──
+
+type InstanceStatus = 'connected' | 'connecting' | 'disconnected';
 
 function InstanceCard({ instance, profiles, onRefresh }: {
   instance: any;
@@ -134,7 +333,7 @@ function InstanceCard({ instance, profiles, onRefresh }: {
   const saveAssignments = useSaveWhatsAppAssignments();
   const [qrCode, setQrCode] = useState<string | null>(null);
   const [qrLoading, setQrLoading] = useState(false);
-  const [status, setStatus] = useState(instance.status || 'disconnected');
+  const [status, setStatus] = useState<InstanceStatus>(instance.status || 'disconnected');
   const [checking, setChecking] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
   const failCount = useRef(0);
@@ -147,9 +346,11 @@ function InstanceCard({ instance, profiles, onRefresh }: {
   const [pairingCode, setPairingCode] = useState<string | null>(null);
   const [pairingPhone, setPairingPhone] = useState('');
   const [pairingLoading, setPairingLoading] = useState(false);
+  const [qrModalOpen, setQrModalOpen] = useState(false);
   const qrInterval = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const isConnected = status === 'connected';
+  const isConnecting = status === 'connecting';
 
   useEffect(() => {
     if (assignments) {
@@ -162,26 +363,22 @@ function InstanceCard({ instance, profiles, onRefresh }: {
   const checkStatus = useCallback(async () => {
     setChecking(true);
     try {
-      const result = await callWhatsAppQrcode({ action: 'status', instance_id: instance.id });
+      const result = await callWhatsAppQrcode({ action: 'check_status', instance_id: instance.id });
       if (result.cached) {
-        // Server couldn't reach Evolution API, keep current state
         setChecking(false);
         return;
       }
-      const connected = result.status === 'connected';
-      setStatus(connected ? 'connected' : 'disconnected');
-      failCount.current = 0;
-      if (connected && qrInterval.current) {
-        clearInterval(qrInterval.current);
-        qrInterval.current = null;
-        setQrCode(null);
+      if (result.status) {
+        setStatus(result.status as InstanceStatus);
+        failCount.current = 0;
+        if (result.status === 'connected' && qrInterval.current) {
+          clearInterval(qrInterval.current);
+          qrInterval.current = null;
+          setQrCode(null);
+        }
       }
     } catch {
       failCount.current++;
-      // Only mark disconnected after 3 consecutive failures
-      if (failCount.current < 3) {
-        console.log(`Status check failed (${failCount.current}/3), keeping current status`);
-      }
     }
     setChecking(false);
   }, [instance.id]);
@@ -190,7 +387,7 @@ function InstanceCard({ instance, profiles, onRefresh }: {
     setReconnecting(true);
     try {
       const result = await callWhatsAppQrcode({ action: 'reconnect', instance_id: instance.id });
-      setStatus(result.status || 'connecting');
+      setStatus((result.status as InstanceStatus) || 'connecting');
       if (result.status === 'connected') {
         toast({ title: 'Reconectado com sucesso!' });
       } else {
@@ -205,7 +402,6 @@ function InstanceCard({ instance, profiles, onRefresh }: {
 
   useEffect(() => {
     checkStatus();
-    // Poll every 45s instead of 20s to reduce API pressure
     const iv = setInterval(checkStatus, 45000);
     return () => {
       clearInterval(iv);
@@ -221,9 +417,9 @@ function InstanceCard({ instance, profiles, onRefresh }: {
       const qr = result?.qrcode;
       const base64 = typeof qr === 'string' ? qr : qr?.base64 || null;
       if (base64) {
-        setQrCode(base64.startsWith('data:') ? base64 : `data:image/png;base64,${base64}`);
+        setQrCode(normalizeBase64(base64));
       } else {
-        const stateCheck = await callWhatsAppQrcode({ action: 'status', instance_id: instance.id });
+        const stateCheck = await callWhatsAppQrcode({ action: 'check_status', instance_id: instance.id });
         if (stateCheck.status === 'connected') {
           setStatus('connected');
           toast({ title: 'Número já conectado!' });
@@ -309,36 +505,56 @@ function InstanceCard({ instance, profiles, onRefresh }: {
     saveAssignments.mutate({ instanceId: instance.id, assignments: arr });
   };
 
+  const statusStrip = isConnected ? 'bg-green-500' : isConnecting ? 'bg-amber-500' : 'bg-muted-foreground/30';
+  const statusIconBg = isConnected ? 'bg-green-100 dark:bg-green-900/30' : isConnecting ? 'bg-amber-100 dark:bg-amber-900/30' : 'bg-muted';
+
   return (
     <Card className="overflow-hidden">
-      {/* Status strip */}
-      <div className={`h-1 ${isConnected ? 'bg-green-500' : 'bg-muted-foreground/30'}`} />
+      <div className={`h-1 ${statusStrip}`} />
 
       <CardContent className="p-5 space-y-5">
         {/* Header */}
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">
-            <div className={`p-2.5 rounded-xl ${isConnected ? 'bg-green-100 dark:bg-green-900/30' : 'bg-muted'}`}>
+            <div className={`p-2.5 rounded-xl ${statusIconBg}`}>
               {isConnected
                 ? <Wifi className="h-5 w-5 text-green-600" />
-                : <WifiOff className="h-5 w-5 text-muted-foreground" />}
+                : isConnecting
+                  ? <Loader2 className="h-5 w-5 text-amber-600 animate-spin" />
+                  : <WifiOff className="h-5 w-5 text-muted-foreground" />}
             </div>
             <div>
               <h3 className="font-bold text-foreground text-base">{instance.name || instance.instance_name}</h3>
               <div className="flex items-center gap-2 mt-0.5">
-                <Badge variant={isConnected ? 'default' : 'secondary'} className="gap-1 text-[10px] h-5">
-                  {isConnected ? <><CheckCircle2 className="h-2.5 w-2.5" />Online</> : <><XCircle className="h-2.5 w-2.5" />Offline</>}
-                </Badge>
+                {isConnected ? (
+                  <Badge variant="default" className="gap-1 text-[10px] h-5 bg-green-500 hover:bg-green-500">
+                    <CheckCircle2 className="h-2.5 w-2.5" />Online
+                  </Badge>
+                ) : isConnecting ? (
+                  <Badge variant="outline" className="gap-1 text-[10px] h-5 border-amber-500 text-amber-600">
+                    <Loader2 className="h-2.5 w-2.5 animate-spin" />Conectando
+                  </Badge>
+                ) : (
+                  <Badge variant="secondary" className="gap-1 text-[10px] h-5">
+                    <XCircle className="h-2.5 w-2.5" />Offline
+                  </Badge>
+                )}
                 <span className="text-[11px] text-muted-foreground">{instance.instance_name}</span>
               </div>
             </div>
           </div>
           <div className="flex items-center gap-1.5">
             {!isConnected && (
-              <Button variant="outline" size="sm" onClick={handleReconnect} disabled={reconnecting} className="gap-1.5 h-8 text-xs">
-                {reconnecting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wifi className="h-3.5 w-3.5" />}
-                Reconectar
-              </Button>
+              <>
+                <Button variant="outline" size="sm" onClick={() => setQrModalOpen(true)} className="gap-1.5 h-8 text-xs">
+                  <QrCode className="h-3.5 w-3.5" />
+                  Ver QR
+                </Button>
+                <Button variant="outline" size="sm" onClick={handleReconnect} disabled={reconnecting} className="gap-1.5 h-8 text-xs">
+                  {reconnecting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wifi className="h-3.5 w-3.5" />}
+                  Reconectar
+                </Button>
+              </>
             )}
             <Button variant="outline" size="sm" onClick={handleActivateWebhook} disabled={activatingWebhook} className="gap-1.5 h-8 text-xs">
               {activatingWebhook ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
@@ -372,7 +588,18 @@ function InstanceCard({ instance, profiles, onRefresh }: {
           </AlertDialogContent>
         </AlertDialog>
 
-        {/* Connection area (only when disconnected) */}
+        {/* QR Modal for existing instance */}
+        {qrModalOpen && (
+          <QrCodeModal
+            instanceId={instance.id}
+            instanceName={instance.name || instance.instance_name}
+            initialQrBase64={null}
+            onConnected={() => { setStatus('connected'); onRefresh(); }}
+            onClose={() => setQrModalOpen(false)}
+          />
+        )}
+
+        {/* Connection area (shown only when disconnected, as fallback tabs) */}
         {!isConnected && (
           <div className="rounded-xl bg-muted/30 border border-dashed border-muted-foreground/20 overflow-hidden">
             {/* Tabs: QR Code / Código */}
@@ -408,7 +635,7 @@ function InstanceCard({ instance, profiles, onRefresh }: {
                   ) : (
                     <>
                       <QrCode className="h-10 w-10 text-muted-foreground/40" />
-                      <p className="text-sm text-muted-foreground">Escaneie o QR Code para conectar</p>
+                      <p className="text-sm text-muted-foreground">Use o botão "Ver QR" acima para abrir o modal de conexão</p>
                       <Button onClick={startQr} disabled={qrLoading} className="gap-2">
                         {qrLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <QrCode className="h-4 w-4" />}
                         Gerar QR Code
@@ -558,6 +785,11 @@ function NewInstanceDialog({ onCreated }: { onCreated: () => void }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
   const [creating, setCreating] = useState(false);
+  const [qrSession, setQrSession] = useState<{
+    instanceId: string;
+    instanceName: string;
+    qrBase64: string | null;
+  } | null>(null);
 
   const handleCreate = async () => {
     if (!name) {
@@ -568,10 +800,16 @@ function NewInstanceDialog({ onCreated }: { onCreated: () => void }) {
     try {
       const result = await callWhatsAppQrcode({ action: 'create', name });
       if (result.error) throw new Error(result.error);
-      toast({ title: 'Instância criada com sucesso!' });
-      onCreated();
+
       setOpen(false);
       setName('');
+      onCreated();
+
+      setQrSession({
+        instanceId: result.instance_id,
+        instanceName: result.instance_name || name,
+        qrBase64: normalizeBase64(result.qrcode_base64 as string | null),
+      });
     } catch (err: any) {
       toast({ title: 'Erro ao criar instância', description: err.message, variant: 'destructive' });
     }
@@ -579,32 +817,51 @@ function NewInstanceDialog({ onCreated }: { onCreated: () => void }) {
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button className="gap-2">
-          <Plus className="h-4 w-4" />
-          Novo Número
-        </Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader><DialogTitle>Conectar Novo Número</DialogTitle></DialogHeader>
-        <p className="text-sm text-muted-foreground -mt-2">
-          Crie uma instância para conectar um número de WhatsApp via QR Code
-        </p>
-        <div className="space-y-4 pt-2">
-          <div className="space-y-1.5">
-            <Label>Nome de identificação</Label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: WhatsApp Vendas" />
-          </div>
-          <Button onClick={handleCreate} disabled={creating} className="w-full gap-2">
-            {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Smartphone className="h-4 w-4" />}
-            Criar e Conectar
+    <>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogTrigger asChild>
+          <Button className="gap-2">
+            <Plus className="h-4 w-4" />
+            Novo Número
           </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
+        </DialogTrigger>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Conectar Novo Número</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground -mt-2">
+            Crie uma instância para conectar um número de WhatsApp via QR Code
+          </p>
+          <div className="space-y-4 pt-2">
+            <div className="space-y-1.5">
+              <Label>Nome de identificação</Label>
+              <Input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Ex: WhatsApp Vendas"
+                onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+              />
+            </div>
+            <Button onClick={handleCreate} disabled={creating} className="w-full gap-2">
+              {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Smartphone className="h-4 w-4" />}
+              Criar e Conectar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {qrSession && (
+        <QrCodeModal
+          instanceId={qrSession.instanceId}
+          instanceName={qrSession.instanceName}
+          initialQrBase64={qrSession.qrBase64}
+          onConnected={() => onCreated()}
+          onClose={() => setQrSession(null)}
+        />
+      )}
+    </>
   );
 }
+
+// ── Page ──
 
 export default function WhatsAppConnectionPage() {
   const { data: instances, isLoading, refetch } = useWhatsAppInstances();
@@ -665,7 +922,7 @@ export default function WhatsAppConnectionPage() {
           <div className="space-y-1">
             <p className="text-sm font-medium text-foreground">Como funciona a distribuição</p>
             <p className="text-xs text-muted-foreground leading-relaxed">
-              Conecte um número via QR Code → Adicione vendedores → Defina a % de mensagens para cada um (total 100%) → 
+              Conecte um número via QR Code → Adicione vendedores → Defina a % de mensagens para cada um (total 100%) →
               Salve. Quando um lead chegar pelo WhatsApp, será automaticamente direcionado ao vendedor de acordo com a porcentagem configurada.
             </p>
           </div>
