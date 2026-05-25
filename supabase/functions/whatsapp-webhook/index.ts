@@ -233,9 +233,9 @@ async function handleMessagesUpsert(
 
     // Nome e push_name
     const contactPhone = remoteJid.split("@")[0];
-    const contactName = isGroup
-      ? ((message as Record<string, Record<string, string>>).groupMetadata?.subject || contactPhone)
-      : (pushNameRaw || contactPhone);
+    // Grupos: NUNCA usar pushName do remetente como nome do grupo.
+    // O nome correto vem do evento chats.upsert (campo subject).
+    const contactName = isGroup ? null : (pushNameRaw || contactPhone);
     const pushName = isGroup ? null : pushNameRaw; // push_name apenas para individuais
 
     // Foto de perfil (apenas para novas conversas, fire-and-forget)
@@ -262,7 +262,7 @@ async function handleMessagesUpsert(
       is_group: isGroup,
     };
 
-    if (!fromMe || isGroup) upsertData.contact_name = contactName;
+    if (!isGroup && (!fromMe || contactName)) upsertData.contact_name = contactName;
     if (pushName && !fromMe) upsertData.push_name = pushName;
     if (profilePicUrl) {
       upsertData.profile_picture_url = profilePicUrl;
@@ -291,7 +291,7 @@ async function handleMessagesUpsert(
           last_message_at: new Date().toISOString(),
           is_group: isGroup,
           ...(!fromMe && pushName ? { push_name: pushName } : {}),
-          ...(!fromMe || isGroup ? { contact_name: contactName } : {}),
+          ...(!fromMe && !isGroup && contactName ? { contact_name: contactName } : {}),
         }).eq("id", existing.id);
         targetChat = existing;
       }
@@ -447,12 +447,13 @@ async function handleContacts(
     const pushName = c.pushName || c.notify || null;
     if (!jid || !pushName) continue;
 
-    // Atualizar push_name apenas se o campo custom_name não estiver preenchido
+    // Atualizar push_name apenas para individuais sem custom_name definido
     await supabase
       .from("whatsapp_chats")
       .update({ push_name: pushName, contact_name: pushName })
       .eq("whatsapp_instance_id", instance.id)
       .eq("remote_jid", jid)
+      .eq("is_group", false)
       .is("custom_name", null);
   }
 }
@@ -469,11 +470,17 @@ async function handleChats(
     if (!jid || !isValidJid(jid)) continue;
 
     const isGroup = jid.endsWith("@g.us");
-    const name = (c.name as string) || (c.subject as string) || null;
+    // Para grupos: subject é o nome do grupo no payload chats.upsert/update
+    const name = isGroup
+      ? ((c.subject as string) || (c.name as string))
+      : ((c.name as string) || null);
+
+    const updateData: Record<string, unknown> = { is_group: isGroup };
+    if (name) updateData.contact_name = name;
 
     await supabase
       .from("whatsapp_chats")
-      .update({ is_group: isGroup, ...(name ? { contact_name: name } : {}) })
+      .update(updateData)
       .eq("whatsapp_instance_id", instance.id)
       .eq("remote_jid", jid);
   }
