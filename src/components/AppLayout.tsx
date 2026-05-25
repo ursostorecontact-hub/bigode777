@@ -3,6 +3,7 @@ import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { AiAssistantWidget } from '@/components/AiAssistantWidget';
 import { AppSidebar } from '@/components/AppSidebar';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLocation } from 'react-router-dom';
 import { Bell, Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -19,6 +20,9 @@ import { useNavigate } from 'react-router-dom';
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const { profile, role, signOut } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  // Esconde o widget global de IA em /conversas — a página tem seu próprio painel
+  const hideGlobalAI = location.pathname === '/conversas';
   const initials = profile?.full_name?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || '?';
 
   return (
@@ -61,7 +65,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             {children}
           </main>
         </div>
-        <AiAssistantWidget />
+        {!hideGlobalAI && <AiAssistantWidget />}
       </div>
     </SidebarProvider>
   );

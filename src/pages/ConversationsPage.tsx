@@ -18,6 +18,7 @@ import {
   Check, CheckCheck, Clock, Mic, MicOff, UserPlus, Paperclip,
   Image as ImageIcon, Video, FileText, X, Trash2, Tag, Settings2, Sparkles, Users,
 } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 import { AISalesPanel } from '@/components/AISalesPanel';
 import {
   useWhatsAppChats,
@@ -30,6 +31,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useLabels, useLabelAssignments, useAssignLabel, useUnassignLabel } from '@/hooks/use-labels';
 import { LabelManagerDialog, LabelAssignPopover, LabelBadges } from '@/components/LabelManager';
+import { useAudioRecorder } from '@/hooks/useAudioRecorder';
 
 // Returns true when a media_url is publicly accessible by the browser.
 // URLs pointing to localhost, private IPs, or internal hostnames are not accessible.
@@ -64,14 +66,12 @@ function formatPhoneDisplay(phone: string) {
 }
 
 function getDisplayName(chat: any) {
-  const name = chat.contact_name;
+  // Prioridade: nome customizado > push_name do WhatsApp > contact_name legado
+  const name = chat.custom_name || chat.push_name || chat.contact_name;
   const phone = chat.contact_phone || '';
-  // If name exists and is NOT just digits (i.e. not a raw ID), use it
   if (name && !/^\d{10,}$/.test(name)) return name;
-  // Try to format phone
   const formatted = formatPhoneDisplay(phone);
   if (formatted) return formatted;
-  // Fallback
   return phone || 'Desconhecido';
 }
 
@@ -118,7 +118,9 @@ function SaveContactDialog({
 }) {
   const [name, setName] = useState(currentName || '');
   const [saving, setSaving] = useState(false);
+  const [savingLead, setSavingLead] = useState(false);
   const { toast } = useToast();
+  const { user } = useAuth();
 
   useEffect(() => {
     if (open) setName(currentName || '');
@@ -130,7 +132,12 @@ function SaveContactDialog({
     try {
       const { error } = await supabase
         .from('whatsapp_chats')
-        .update({ contact_name: name.trim() })
+        .update({
+          custom_name: name.trim(),
+          contact_name: name.trim(),
+          custom_name_updated_by: user?.id ?? null,
+          custom_name_updated_at: new Date().toISOString(),
+        })
         .eq('id', chatId);
       if (error) throw error;
       toast({ title: 'Contato salvo', description: `${name.trim()} foi salvo com sucesso.` });
@@ -139,6 +146,32 @@ function SaveContactDialog({
       toast({ title: 'Erro ao salvar', description: err.message, variant: 'destructive' });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSaveAsLead = async () => {
+    const contactName = name.trim() || currentName || phone;
+    setSavingLead(true);
+    try {
+      const { data: existing } = await supabase.from('leads').select('id').eq('phone', phone).maybeSingle();
+      if (existing) {
+        toast({ title: 'Lead já existe', description: 'Este número já está cadastrado como lead.' });
+        setSavingLead(false);
+        return;
+      }
+      const { error } = await supabase.from('leads').insert({
+        name: contactName,
+        phone,
+        source: 'WhatsApp',
+        status: 'novo',
+        pipeline_stage: 'novo',
+      });
+      if (error) throw error;
+      toast({ title: 'Lead criado!', description: `${contactName} adicionado ao pipeline.` });
+    } catch (err: any) {
+      toast({ title: 'Erro ao criar lead', description: err.message, variant: 'destructive' });
+    } finally {
+      setSavingLead(false);
     }
   };
 
@@ -163,73 +196,20 @@ function SaveContactDialog({
             />
           </div>
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+        <DialogFooter className="flex-col gap-2 sm:flex-row">
+          <Button variant="outline" onClick={() => onOpenChange(false)} className="sm:mr-auto">Cancelar</Button>
+          <Button variant="outline" onClick={handleSaveAsLead} disabled={savingLead}>
+            {savingLead ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+            💾 Salvar como Lead
+          </Button>
           <Button onClick={handleSave} disabled={!name.trim() || saving}>
             {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-            Salvar
+            Salvar Nome
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
-}
-
-// ── Audio Recorder Hook ──
-function useAudioRecorder() {
-  const [recording, setRecording] = useState(false);
-  const [duration, setDuration] = useState(0);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const start = useCallback(async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
-      mediaRecorderRef.current = mediaRecorder;
-      chunksRef.current = [];
-
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) chunksRef.current.push(e.data);
-      };
-
-      mediaRecorder.start();
-      setRecording(true);
-      setDuration(0);
-      timerRef.current = setInterval(() => setDuration((d) => d + 1), 1000);
-    } catch {
-      throw new Error('Permissão de microfone negada');
-    }
-  }, []);
-
-  const stop = useCallback((): Promise<Blob> => {
-    return new Promise((resolve) => {
-      const mr = mediaRecorderRef.current;
-      if (!mr) return;
-      mr.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: 'audio/webm;codecs=opus' });
-        mr.stream.getTracks().forEach((t) => t.stop());
-        resolve(blob);
-      };
-      mr.stop();
-      setRecording(false);
-      if (timerRef.current) clearInterval(timerRef.current);
-    });
-  }, []);
-
-  const cancel = useCallback(() => {
-    const mr = mediaRecorderRef.current;
-    if (mr && mr.state !== 'inactive') {
-      mr.stream.getTracks().forEach((t) => t.stop());
-      mr.stop();
-    }
-    setRecording(false);
-    setDuration(0);
-    if (timerRef.current) clearInterval(timerRef.current);
-  }, []);
-
-  return { recording, duration, start, stop, cancel };
 }
 
 function formatDuration(secs: number) {
@@ -239,6 +219,8 @@ function formatDuration(secs: number) {
 }
 
 // ── Chat List ──
+type ChatTab = 'conversations' | 'groups';
+
 function ChatList({
   chats,
   selectedId,
@@ -252,6 +234,8 @@ function ChatList({
   activeLabel,
   onLabelFilter,
   onManageLabels,
+  activeTab,
+  onTabChange,
 }: {
   chats: any[];
   selectedId: string | null;
@@ -265,8 +249,16 @@ function ChatList({
   activeLabel: string | null;
   onLabelFilter: (id: string | null) => void;
   onManageLabels: () => void;
+  activeTab: ChatTab;
+  onTabChange: (tab: ChatTab) => void;
 }) {
-  const searchFiltered = chats.filter(
+  // Filtro por tab (grupo vs conversa individual)
+  const tabFiltered = chats.filter((c) => {
+    const isGroup = c.is_group ?? (c.remote_jid || '').endsWith('@g.us');
+    return activeTab === 'groups' ? isGroup : !isGroup;
+  });
+
+  const searchFiltered = tabFiltered.filter(
     (c) =>
       (c.contact_name || c.contact_phone || '').toLowerCase().includes(search.toLowerCase()) ||
       getDisplayName(c).toLowerCase().includes(search.toLowerCase())
@@ -275,11 +267,61 @@ function ChatList({
     ? searchFiltered.filter((c) => assignments.some((a: any) => a.chat_id === c.id && a.label_id === activeLabel))
     : searchFiltered;
 
+  // Contadores de não-lidos por tab
+  const unreadConversations = chats.filter((c) => {
+    const isGroup = c.is_group ?? (c.remote_jid || '').endsWith('@g.us');
+    return !isGroup && c.unread_count > 0;
+  }).length;
+  const unreadGroups = chats.filter((c) => {
+    const isGroup = c.is_group ?? (c.remote_jid || '').endsWith('@g.us');
+    return isGroup && c.unread_count > 0;
+  }).length;
+
   return (
     <div className="flex flex-col h-full border-r border-border">
       <div className="p-3 border-b border-border bg-card">
+        {/* Tabs: Conversas / Grupos */}
+        <div className="flex gap-1 mb-3">
+          <button
+            onClick={() => onTabChange('conversations')}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              activeTab === 'conversations'
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-muted text-muted-foreground hover:bg-muted/80'
+            }`}
+          >
+            <MessageSquare className="h-3.5 w-3.5" />
+            Conversas
+            {unreadConversations > 0 && (
+              <span className={`text-[10px] rounded-full px-1.5 py-0.5 min-w-[18px] text-center leading-none ${
+                activeTab === 'conversations' ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-green-500 text-white'
+              }`}>
+                {unreadConversations}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => onTabChange('groups')}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              activeTab === 'groups'
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-muted text-muted-foreground hover:bg-muted/80'
+            }`}
+          >
+            <Users className="h-3.5 w-3.5" />
+            Grupos
+            {unreadGroups > 0 && (
+              <span className={`text-[10px] rounded-full px-1.5 py-0.5 min-w-[18px] text-center leading-none ${
+                activeTab === 'groups' ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-green-500 text-white'
+              }`}>
+                {unreadGroups}
+              </span>
+            )}
+          </button>
+        </div>
+
         <div className="flex items-center justify-between mb-2">
-          <h2 className="font-bold text-foreground text-lg">Conversas</h2>
+          <h2 className="font-bold text-foreground text-lg">{activeTab === 'groups' ? 'Grupos' : 'Conversas'}</h2>
           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onManageLabels} title="Gerenciar etiquetas">
             <Settings2 className="h-4 w-4" />
           </Button>
@@ -838,6 +880,17 @@ function MessageArea({
               className="flex-1"
               disabled={sendMessage.isPending || sending}
             />
+            {/* Botão IA — dentro do flow, não flutuante */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className={`h-10 w-10 shrink-0 ${aiPanelOpen ? 'text-orange-500' : 'text-muted-foreground hover:text-orange-500'}`}
+              onClick={onToggleAI}
+              title="Sugestão de IA"
+              disabled={sending}
+            >
+              <Sparkles className="h-5 w-5" />
+            </Button>
             <Button
               onClick={handleSend}
               disabled={!text.trim() || sendMessage.isPending || sending}
@@ -903,6 +956,7 @@ export default function ConversationsPage() {
   const [activeLabel, setActiveLabel] = useState<string | null>(null);
   const [showLabelManager, setShowLabelManager] = useState(false);
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<ChatTab>('conversations');
   const { data: labels } = useLabels();
   const { data: chatAssignments } = useLabelAssignments('chat');
   const assignLabel = useAssignLabel();
@@ -949,6 +1003,8 @@ export default function ConversationsPage() {
           activeLabel={activeLabel}
           onLabelFilter={setActiveLabel}
           onManageLabels={() => setShowLabelManager(true)}
+          activeTab={activeTab}
+          onTabChange={(tab) => { setActiveTab(tab); setSelectedChatId(null); }}
         />
       </div>
       <div className={`flex-1 min-w-0 ${!selectedChatId ? 'hidden md:flex md:flex-col' : 'flex flex-col'}`}>

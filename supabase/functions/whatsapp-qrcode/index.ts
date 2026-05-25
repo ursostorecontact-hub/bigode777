@@ -36,33 +36,81 @@ function buildInstancePayload(params: {
   return payload;
 }
 
-async function registerWebhook(evolutionUrl: string, apiKey: string, instanceName: string, supabaseUrl: string) {
+async function registerWebhookWithRetry(
+  evolutionUrl: string,
+  apiKey: string,
+  instanceName: string,
+  supabaseUrl: string,
+  supabase?: ReturnType<typeof createClient>,
+  instanceId?: string,
+): Promise<{ ok: boolean; error?: string }> {
   const webhookUrl = `${supabaseUrl}/functions/v1/whatsapp-webhook`;
-  const endpoints = [
-    { url: `${evolutionUrl}/webhook/set/${instanceName}`, method: "POST" },
-    { url: `${evolutionUrl}/webhook/instance/${instanceName}`, method: "PUT" },
-  ];
-  for (const ep of endpoints) {
+  const config = {
+    webhook: {
+      enabled: true,
+      url: webhookUrl,
+      webhookByEvents: false,
+      webhookBase64: true,
+      events: [
+        "MESSAGES_UPSERT", "MESSAGES_UPDATE",
+        "CONNECTION_UPDATE",
+        "CONTACTS_UPSERT", "CONTACTS_UPDATE",
+        "CHATS_UPSERT", "CHATS_UPDATE",
+      ],
+    },
+  };
+
+  for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      const res = await fetch(ep.url, {
-        method: ep.method,
+      await fetch(`${evolutionUrl}/webhook/set/${instanceName}`, {
+        method: "POST",
         headers: { "Content-Type": "application/json", apikey: apiKey },
-        body: JSON.stringify({
-          enabled: true,
-          url: webhookUrl,
-          webhookByEvents: false,
-          events: ["MESSAGES_UPSERT", "MESSAGES_UPDATE", "CONNECTION_UPDATE", "QRCODE_UPDATED",
-            "messages.upsert", "messages.update", "connection.update"],
-        }),
+        body: JSON.stringify(config),
         signal: AbortSignal.timeout(10000),
       });
-      const txt = await res.text();
-      console.log(`Webhook register (${ep.url}) status=${res.status}: ${txt.slice(0, 200)}`);
-      if (res.ok) return;
-    } catch (err) {
-      console.error(`Webhook register error (${ep.url}):`, err);
+
+      await new Promise((r) => setTimeout(r, 500));
+
+      const verifyRes = await fetch(`${evolutionUrl}/webhook/find/${instanceName}`, {
+        headers: { apikey: apiKey },
+        signal: AbortSignal.timeout(8000),
+      });
+
+      if (verifyRes.ok) {
+        const verifyData = await verifyRes.json();
+        if (verifyData?.enabled === true && verifyData?.url === webhookUrl) {
+          console.log(`[qrcode] webhook validado na tentativa ${attempt} para ${instanceName}`);
+          if (supabase && instanceId) {
+            await supabase.from("whatsapp_instances").update({
+              webhook_url: webhookUrl,
+              webhook_verified_at: new Date().toISOString(),
+              webhook_last_error: null,
+            }).eq("id", instanceId);
+          }
+          return { ok: true };
+        }
+        console.warn(`[qrcode] tentativa ${attempt} falhou, validação:`, JSON.stringify(verifyData).slice(0, 200));
+      } else {
+        console.warn(`[qrcode] GET webhook/find status=${verifyRes.status} na tentativa ${attempt}`);
+      }
+
+      await new Promise((r) => setTimeout(r, attempt * 1000));
+    } catch (e) {
+      console.error(`[qrcode] tentativa ${attempt} erro:`, e);
+      await new Promise((r) => setTimeout(r, attempt * 1000));
     }
   }
+
+  const errMsg = "Webhook não validou após 3 tentativas";
+  if (supabase && instanceId) {
+    await supabase.from("whatsapp_instances").update({ webhook_last_error: errMsg }).eq("id", instanceId);
+  }
+  return { ok: false, error: errMsg };
+}
+
+// Backward-compat shim — callers that don't need the result
+async function registerWebhook(evolutionUrl: string, apiKey: string, instanceName: string, supabaseUrl: string) {
+  await registerWebhookWithRetry(evolutionUrl, apiKey, instanceName, supabaseUrl);
 }
 
 function isAlreadyExistsError(text: string, status: number) {
@@ -248,9 +296,9 @@ Deno.serve(async (req) => {
         qrcodeBase64 = await fetchQrFromConnect(evoUrl, evoKey, finalInstanceName);
       }
 
-      // Register webhook (best-effort)
+      // Register webhook with validation (best-effort — ID não existe ainda, sem DB update agora)
       if (evolutionOk) {
-        await registerWebhook(evoUrl, evoKey, finalInstanceName, supabaseUrl);
+        await registerWebhookWithRetry(evoUrl, evoKey, finalInstanceName, supabaseUrl);
       }
 
       // Check connection state (best-effort)
@@ -412,9 +460,9 @@ Deno.serve(async (req) => {
         await adminClient.from("whatsapp_instances").update({ status: newStatus }).eq("id", instance_id);
         console.log(`Status changed: ${oldStatus} → ${newStatus} for ${inst.instance_name}`);
 
-        // Re-register webhook when newly connected
+        // Re-register webhook when newly connected (with validation + DB update)
         if (newStatus === "connected") {
-          await registerWebhook(evoUrl, evoKey, inst.instance_name, supabaseUrl);
+          await registerWebhookWithRetry(evoUrl, evoKey, inst.instance_name, supabaseUrl, adminClient, instance_id);
           // Fire whatsapp-sync in background (best-effort, non-blocking)
           fetch(`${supabaseUrl}/functions/v1/whatsapp-sync`, {
             method: "POST",
@@ -681,12 +729,20 @@ Deno.serve(async (req) => {
         if (checkRes.ok) currentWebhook = await checkRes.json();
       } catch (_) {}
 
-      await registerWebhook(evoUrl, evoKey, inst.instance_name, supabaseUrl);
+      const webhookResult = await registerWebhookWithRetry(evoUrl, evoKey, inst.instance_name, supabaseUrl, adminClient, instance_id);
+      if (!webhookResult.ok) {
+        return json({
+          ok: false,
+          current_webhook: currentWebhook,
+          error: webhookResult.error,
+        }, 502);
+      }
       return json({
         ok: true,
         current_webhook: currentWebhook,
         expected_url: `${supabaseUrl}/functions/v1/whatsapp-webhook`,
         re_registered: true,
+        verified: true,
       });
     }
 

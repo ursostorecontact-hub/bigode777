@@ -8,466 +8,545 @@ const corsHeaders = {
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-// Override for server-side Evolution API calls (avoids SSL issues with public URL).
-// Set EVOLUTION_SERVER_URL in Supabase Edge Function secrets, e.g. http://YOUR_VPS_IP:64644
+// Override para chamar Evolution API via IP interno (evita SSL com domínio público)
 const EVOLUTION_SERVER_URL_OVERRIDE = Deno.env.get("EVOLUTION_SERVER_URL") || "";
 function evoServerUrl(instanceUrl: string): string {
   return EVOLUTION_SERVER_URL_OVERRIDE || instanceUrl;
 }
 
-// Normalize WhatsApp JIDs: @lid -> @s.whatsapp.net to prevent duplicates
 function normalizeJid(jid: string): string {
   if (!jid) return jid;
   if (jid.endsWith("@lid")) return jid.replace(/@lid$/, "@s.whatsapp.net");
   return jid;
 }
 
-// Valid WhatsApp JIDs must have a recognized suffix.
-// Evolution internal IDs (e.g. "cmo7tr8ex6nzdp34j44v4o16b") have no suffix — reject them.
 function isValidJid(jid: string): boolean {
-  return jid.endsWith("@s.whatsapp.net") || jid.endsWith("@g.us") || jid.endsWith("@lid");
+  return jid.endsWith("@s.whatsapp.net") || jid.endsWith("@g.us");
 }
 
-// Download media from Evolution API and upload to Supabase storage
+interface MediaResult {
+  url: string | null;
+  mimeType: string | null;
+}
+
 async function downloadAndStoreMedia(
-  supabase: any,
+  supabase: ReturnType<typeof createClient>,
   evolutionUrl: string,
   evolutionApiKey: string,
   instanceName: string,
   messageId: string,
-  mediaType: string,
-): Promise<string | null> {
+  tenantId: string,
+  hintMimeType?: string,
+): Promise<MediaResult> {
   try {
-    // Try to get base64 media from Evolution API
     const mediaRes = await fetch(
       `${evoServerUrl(evolutionUrl)}/chat/getBase64FromMediaMessage/${instanceName}`,
       {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          apikey: evolutionApiKey,
-        },
+        headers: { "Content-Type": "application/json", apikey: evolutionApiKey },
         body: JSON.stringify({ message: { key: { id: messageId } } }),
+        signal: AbortSignal.timeout(15000),
       }
     );
 
     if (!mediaRes.ok) {
-      console.log("Failed to download media:", mediaRes.status);
-      return null;
+      console.log(`[webhook] mídia download falhou ${mediaRes.status} para msg ${messageId}`);
+      return { url: null, mimeType: null };
     }
 
     const mediaData = await mediaRes.json();
     const base64 = mediaData?.base64;
-    const mimetype = mediaData?.mimetype || `${mediaType}/*`;
+    const mimetype: string = mediaData?.mimetype || hintMimeType || "application/octet-stream";
 
     if (!base64) {
-      console.log("No base64 in media response");
-      return null;
+      console.log(`[webhook] sem base64 para msg ${messageId}`);
+      return { url: null, mimeType: null };
     }
 
-    // Determine file extension
     const extMap: Record<string, string> = {
-      "audio/ogg": "ogg",
-      "audio/mpeg": "mp3",
-      "audio/mp4": "m4a",
-      "audio/aac": "aac",
-      "audio/opus": "opus",
-      "image/jpeg": "jpg",
-      "image/png": "png",
-      "image/webp": "webp",
-      "video/mp4": "mp4",
+      "audio/ogg": "ogg", "audio/mpeg": "mp3", "audio/mp4": "m4a",
+      "audio/aac": "aac", "audio/opus": "opus", "audio/webm": "webm",
+      "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif",
+      "video/mp4": "mp4", "video/webm": "webm",
       "application/pdf": "pdf",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
     };
-    const ext = extMap[mimetype] || mediaType;
-    const filePath = `webhook/${Date.now()}_${messageId.slice(-8)}.${ext}`;
+    const ext = extMap[mimetype] || mimetype.split("/").pop() || "bin";
+    const filePath = `webhook/${tenantId}/${Date.now()}_${messageId.slice(-8)}.${ext}`;
 
-    // Decode base64 and upload
     const binaryStr = atob(base64);
     const bytes = new Uint8Array(binaryStr.length);
-    for (let i = 0; i < binaryStr.length; i++) {
-      bytes[i] = binaryStr.charCodeAt(i);
-    }
+    for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
 
     const { error: uploadError } = await supabase.storage
       .from("whatsapp-media")
       .upload(filePath, bytes.buffer, { contentType: mimetype, upsert: true });
 
     if (uploadError) {
-      console.error("Upload error:", uploadError);
-      return null;
+      console.error("[webhook] upload error:", uploadError);
+      return { url: null, mimeType: mimetype };
     }
 
-    const { data: publicUrl } = supabase.storage
-      .from("whatsapp-media")
-      .getPublicUrl(filePath);
-
-    return publicUrl?.publicUrl || null;
+    const { data: publicUrlData } = supabase.storage.from("whatsapp-media").getPublicUrl(filePath);
+    return { url: publicUrlData?.publicUrl || null, mimeType: mimetype };
   } catch (err) {
-    console.error("Media download/upload error:", err);
+    console.error(`[webhook] downloadAndStoreMedia error para ${messageId}:`, err);
+    return { url: null, mimeType: null };
+  }
+}
+
+async function fetchProfilePic(evoUrl: string, evoKey: string, instanceName: string, contactPhone: string): Promise<string | null> {
+  try {
+    const res = await fetch(
+      `${evoServerUrl(evoUrl)}/chat/fetchProfilePictureUrl/${instanceName}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", apikey: evoKey },
+        body: JSON.stringify({ number: contactPhone }),
+        signal: AbortSignal.timeout(8000),
+      }
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data?.profilePictureUrl || data?.picture || null;
+  } catch {
     return null;
   }
 }
+
+// ── Event Handlers ─────────────────────────────────────────────────────────
+
+async function handleMessagesUpsert(
+  supabase: ReturnType<typeof createClient>,
+  data: unknown,
+  instance: { id: string; evolution_url: string; evolution_api_key: string; tenant_id: string },
+  instanceName: string,
+): Promise<void> {
+  const msgs = Array.isArray(data) ? data : [data];
+
+  for (const msg of msgs) {
+    const key = (msg as Record<string, unknown>).key as Record<string, unknown> || {};
+    const remoteJid = normalizeJid((key.remoteJid as string) || (msg as Record<string, string>).remoteJid || "");
+    const fromMe = (key.fromMe as boolean) ?? false;
+    const messageId = (key.id as string) || (msg as Record<string, string>).id || "";
+
+    if (!isValidJid(remoteJid) || remoteJid === "status@broadcast") continue;
+
+    const isGroup = remoteJid.endsWith("@g.us");
+    const senderJid = isGroup ? normalizeJid((key.participant as string) || "") : null;
+    const pushNameRaw = (msg as Record<string, string>).pushName || null;
+    const senderName = isGroup ? pushNameRaw : null; // nome do remetente em grupo
+
+    console.log(`[webhook] msg: jid=${remoteJid} fromMe=${fromMe} type=${isGroup ? "group" : "individual"} id=${messageId}`);
+
+    // Extrair conteúdo e tipo
+    let content = "";
+    let messageType = "text";
+    let needsMedia = false;
+    let mediaFilename: string | null = null;
+    let mediaCaption: string | null = null;
+    let hintMimeType: string | undefined;
+
+    const message = (msg as Record<string, unknown>).message as Record<string, unknown> || {};
+
+    if (message.conversation) {
+      content = message.conversation as string;
+    } else if ((message.extendedTextMessage as Record<string, unknown>)?.text) {
+      content = ((message.extendedTextMessage as Record<string, string>).text);
+    } else if (message.imageMessage) {
+      const im = message.imageMessage as Record<string, string>;
+      messageType = "image";
+      mediaCaption = im.caption || null;
+      content = mediaCaption || "📷 Imagem";
+      needsMedia = true;
+      hintMimeType = im.mimetype || "image/jpeg";
+    } else if (message.videoMessage) {
+      const vm = message.videoMessage as Record<string, string>;
+      messageType = "video";
+      mediaCaption = vm.caption || null;
+      content = mediaCaption || "🎥 Vídeo";
+      needsMedia = true;
+      hintMimeType = vm.mimetype || "video/mp4";
+    } else if (message.audioMessage || message.pttMessage) {
+      const am = (message.audioMessage || message.pttMessage) as Record<string, string>;
+      messageType = "audio";
+      content = "🎵 Áudio";
+      needsMedia = true;
+      hintMimeType = am.mimetype || "audio/ogg";
+    } else if (message.documentMessage) {
+      const dm = message.documentMessage as Record<string, string>;
+      messageType = "document";
+      mediaFilename = dm.fileName || dm.title || null;
+      mediaCaption = dm.caption || null;
+      content = mediaFilename || mediaCaption || "📄 Documento";
+      needsMedia = true;
+      hintMimeType = dm.mimetype || "application/octet-stream";
+    } else if (message.stickerMessage) {
+      const sm = message.stickerMessage as Record<string, string>;
+      messageType = "sticker";
+      content = "🎨 Sticker";
+      needsMedia = true;
+      hintMimeType = sm.mimetype || "image/webp";
+    } else if (message.locationMessage) {
+      const lm = message.locationMessage as Record<string, number | string>;
+      messageType = "location";
+      content = JSON.stringify({
+        lat: lm.degreesLatitude,
+        lng: lm.degreesLongitude,
+        name: lm.name || null,
+      });
+    } else if (message.contactMessage || message.contactsArrayMessage) {
+      const cm = (message.contactMessage || (message.contactsArrayMessage as Record<string, unknown[]>)?.contacts?.[0]) as Record<string, string> || {};
+      messageType = "contact";
+      content = cm.displayName || "Contato";
+    } else if (message.reactionMessage) {
+      const rm = message.reactionMessage as Record<string, string>;
+      messageType = "reaction";
+      content = rm.text || "❤️";
+    } else {
+      messageType = "unsupported";
+      content = "Mensagem não suportada";
+    }
+
+    // Download mídia
+    let mediaUrl: string | null = null;
+    let mediaMimeType: string | null = null;
+    if (needsMedia && messageId) {
+      try {
+        const result = await downloadAndStoreMedia(
+          supabase,
+          evoServerUrl(instance.evolution_url),
+          instance.evolution_api_key,
+          instanceName,
+          messageId,
+          instance.tenant_id,
+          hintMimeType,
+        );
+        mediaUrl = result.url;
+        mediaMimeType = result.mimeType;
+      } catch (e) {
+        console.error(`[webhook] mídia falhou para ${messageId}:`, e);
+        messageType = "unsupported";
+      }
+    }
+
+    // Nome e push_name
+    const contactPhone = remoteJid.split("@")[0];
+    const contactName = isGroup
+      ? ((message as Record<string, Record<string, string>>).groupMetadata?.subject || contactPhone)
+      : (pushNameRaw || contactPhone);
+    const pushName = isGroup ? null : pushNameRaw; // push_name apenas para individuais
+
+    // Foto de perfil (apenas para novas conversas, fire-and-forget)
+    let profilePicUrl: string | null = null;
+    try {
+      profilePicUrl = await fetchProfilePic(
+        evoServerUrl(instance.evolution_url),
+        instance.evolution_api_key,
+        instanceName,
+        contactPhone,
+      );
+    } catch (e) {
+      console.log("[webhook] foto de perfil falhou:", e);
+    }
+
+    // Upsert do chat
+    const upsertData: Record<string, unknown> = {
+      whatsapp_instance_id: instance.id,
+      remote_jid: remoteJid,
+      contact_phone: contactPhone,
+      last_message: content,
+      last_message_at: new Date().toISOString(),
+      tenant_id: instance.tenant_id,
+      is_group: isGroup,
+    };
+
+    if (!fromMe || isGroup) upsertData.contact_name = contactName;
+    if (pushName && !fromMe) upsertData.push_name = pushName;
+    if (profilePicUrl) {
+      upsertData.profile_picture_url = profilePicUrl;
+      upsertData.profile_pic_url = profilePicUrl;
+    }
+
+    const { data: chat, error: chatError } = await supabase
+      .from("whatsapp_chats")
+      .upsert(upsertData, { onConflict: "whatsapp_instance_id,remote_jid" })
+      .select()
+      .single();
+
+    // Se upsert falhou, tentar update direto
+    let targetChat: Record<string, unknown> | null = chat;
+    if (chatError) {
+      console.error("[webhook] chat upsert error:", chatError);
+      const { data: existing } = await supabase
+        .from("whatsapp_chats")
+        .select("*")
+        .eq("whatsapp_instance_id", instance.id)
+        .eq("remote_jid", remoteJid)
+        .single();
+      if (existing) {
+        await supabase.from("whatsapp_chats").update({
+          last_message: content,
+          last_message_at: new Date().toISOString(),
+          is_group: isGroup,
+          ...(!fromMe && pushName ? { push_name: pushName } : {}),
+          ...(!fromMe || isGroup ? { contact_name: contactName } : {}),
+        }).eq("id", existing.id);
+        targetChat = existing;
+      }
+    }
+
+    if (!targetChat) {
+      console.error("[webhook] não foi possível obter chat para", remoteJid);
+      continue;
+    }
+
+    const chatId = targetChat.id as string;
+
+    // Incrementar não-lidos para mensagens recebidas
+    if (!fromMe) {
+      await supabase
+        .from("whatsapp_chats")
+        .update({ unread_count: ((targetChat.unread_count as number) || 0) + 1 })
+        .eq("id", chatId);
+    }
+
+    // Auto-criar lead (apenas individual, não grupo)
+    if (!fromMe && !isGroup) {
+      const tenantId = instance.tenant_id;
+      const { data: existingLead } = await supabase
+        .from("leads").select("id").eq("phone", contactPhone).eq("tenant_id", tenantId).maybeSingle();
+
+      if (!existingLead) {
+        const { data: existingClient } = await supabase
+          .from("clients").select("id").eq("phone", contactPhone).eq("tenant_id", tenantId).maybeSingle();
+
+        if (!existingClient) {
+          const { error: leadError } = await supabase.from("leads").insert({
+            name: contactName || contactPhone,
+            phone: contactPhone,
+            source: "WhatsApp",
+            notes: `Primeira mensagem: ${content}`,
+            status: "novo",
+            pipeline_stage: "novo",
+            whatsapp_instance_id: instance.id,
+            tenant_id: tenantId,
+          });
+          if (leadError) console.error("[webhook] lead auto-create error:", leadError);
+          else console.log(`[webhook] lead criado para ${contactPhone}`);
+        }
+      }
+    }
+
+    // Distribuição automática por porcentagem
+    if (!targetChat.assigned_to) {
+      const { data: assignments } = await supabase
+        .from("whatsapp_assignments")
+        .select("*")
+        .eq("whatsapp_instance_id", instance.id)
+        .order("percentage", { ascending: false });
+
+      if (assignments && assignments.length > 0) {
+        const { data: chatCounts } = await supabase
+          .from("whatsapp_chats")
+          .select("assigned_to")
+          .eq("whatsapp_instance_id", instance.id)
+          .not("assigned_to", "is", null);
+
+        const counts: Record<string, number> = {};
+        chatCounts?.forEach((c) => {
+          if (c.assigned_to) counts[c.assigned_to] = (counts[c.assigned_to] || 0) + 1;
+        });
+        const total = Object.values(counts).reduce((s, v) => s + v, 0) || 1;
+
+        let bestSeller = (assignments[0] as Record<string, string>).user_id;
+        let bestGap = -Infinity;
+        for (const a of assignments) {
+          const ass = a as Record<string, number | string>;
+          const actual = ((counts[ass.user_id as string] || 0) / total) * 100;
+          const gap = (ass.percentage as number) - actual;
+          if (gap > bestGap) { bestGap = gap; bestSeller = ass.user_id as string; }
+        }
+
+        await supabase.from("whatsapp_chats").update({ assigned_to: bestSeller }).eq("id", chatId);
+        if (contactPhone) {
+          await supabase.from("leads").update({ assigned_to: bestSeller })
+            .eq("phone", contactPhone).is("assigned_to", null);
+        }
+      }
+    }
+
+    // Inserir mensagem
+    const { error: msgError } = await supabase.from("whatsapp_messages").insert({
+      chat_id: chatId,
+      from_me: fromMe,
+      remote_jid: remoteJid,
+      message_type: messageType,
+      content,
+      media_url: mediaUrl,
+      media_mime_type: mediaMimeType,
+      media_filename: mediaFilename,
+      media_caption: mediaCaption,
+      status: fromMe ? "sent" : "received",
+      evolution_message_id: messageId,
+      tenant_id: instance.tenant_id,
+      sender_name: senderName,
+      sender_jid: senderJid,
+    });
+    if (msgError) console.error("[webhook] insert message error:", msgError);
+  }
+}
+
+async function handleMessagesUpdate(
+  supabase: ReturnType<typeof createClient>,
+  data: unknown,
+): Promise<void> {
+  const updates = Array.isArray(data) ? data : [data];
+  for (const upd of updates) {
+    const u = upd as Record<string, Record<string, unknown>>;
+    const msgId = u.key?.id as string;
+    const status = u.update?.status as number;
+    if (!msgId || status === undefined) continue;
+
+    const statusMap: Record<number, string> = { 2: "sent", 3: "delivered", 4: "read" };
+    const newStatus = statusMap[status] || "sent";
+    await supabase.from("whatsapp_messages").update({ status: newStatus }).eq("evolution_message_id", msgId);
+  }
+}
+
+async function handleConnectionUpdate(
+  supabase: ReturnType<typeof createClient>,
+  data: unknown,
+  instance: { id: string; instance_name: string },
+): Promise<void> {
+  const d = data as Record<string, string>;
+  const state = d?.state || d?.status;
+  if (!state) return;
+
+  const statusMap: Record<string, string> = {
+    "open": "connected",
+    "connecting": "connecting",
+    "close": "disconnected",
+  };
+  const newStatus = statusMap[state] || "disconnected";
+
+  await supabase.from("whatsapp_instances").update({ status: newStatus }).eq("id", instance.id);
+  console.log(`[webhook] connection.update ${instance.instance_name}: ${state} → ${newStatus}`);
+}
+
+async function handleContacts(
+  supabase: ReturnType<typeof createClient>,
+  data: unknown,
+  instance: { id: string },
+): Promise<void> {
+  const contacts = Array.isArray(data) ? data : [data];
+  for (const contact of contacts) {
+    const c = contact as Record<string, string>;
+    const jid = normalizeJid(c.id || "");
+    const pushName = c.pushName || c.notify || null;
+    if (!jid || !pushName) continue;
+
+    // Atualizar push_name apenas se o campo custom_name não estiver preenchido
+    await supabase
+      .from("whatsapp_chats")
+      .update({ push_name: pushName, contact_name: pushName })
+      .eq("whatsapp_instance_id", instance.id)
+      .eq("remote_jid", jid)
+      .is("custom_name", null);
+  }
+}
+
+async function handleChats(
+  supabase: ReturnType<typeof createClient>,
+  data: unknown,
+  instance: { id: string; tenant_id: string },
+): Promise<void> {
+  const chats = Array.isArray(data) ? data : [data];
+  for (const chat of chats) {
+    const c = chat as Record<string, unknown>;
+    const jid = normalizeJid((c.id as string) || "");
+    if (!jid || !isValidJid(jid)) continue;
+
+    const isGroup = jid.endsWith("@g.us");
+    const name = (c.name as string) || (c.subject as string) || null;
+
+    await supabase
+      .from("whatsapp_chats")
+      .update({ is_group: isGroup, ...(name ? { contact_name: name } : {}) })
+      .eq("whatsapp_instance_id", instance.id)
+      .eq("remote_jid", jid);
+  }
+}
+
+// ── Main Handler ───────────────────────────────────────────────────────────
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  // SEMPRE retornar 200 para Evolution não retentar
   try {
     const body = await req.json();
-    console.log("Webhook received:", JSON.stringify(body).slice(0, 500));
+    console.log(`[webhook] event=${body.event} instance=${body.instance} data_len=${JSON.stringify(body.data || {}).length}`);
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Normalize event name: Evolution API v2 sends MESSAGES_UPSERT, v1 sends messages.upsert
-    const rawEvent = body.event || "";
+    const rawEvent: string = body.event || "";
     const event = rawEvent.toLowerCase().replace(/_/g, ".");
-    const instanceName = body.instance || body.instanceName || body.sender || "";
+    const instanceName: string = body.instance || body.instanceName || body.sender || "";
     const data = body.data || body;
 
     if (!instanceName) {
-      console.log("No instance name in webhook body, keys:", Object.keys(body));
+      console.log("[webhook] sem nome de instância, ignorando");
       return new Response(JSON.stringify({ ok: true, skipped: "no instance name" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Find the instance in our DB (with evolution credentials)
     const { data: instanceRow } = await supabase
       .from("whatsapp_instances")
       .select("id, evolution_url, evolution_api_key, tenant_id")
       .eq("instance_name", instanceName)
       .single();
 
-    const instance = instanceRow ? {
-      ...instanceRow,
-      evolution_url: instanceRow.evolution_url || "",
-      evolution_api_key: instanceRow.evolution_api_key || "",
-    } : null;
-
-    if (!instance) {
-      console.log("Instance not found:", instanceName);
+    if (!instanceRow) {
+      console.log(`[webhook] instância não encontrada: ${instanceName}`);
       return new Response(JSON.stringify({ ok: true, skipped: "instance not found" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    console.log("Processing event:", event, "for instance:", instanceName);
+    const instance = {
+      ...instanceRow,
+      evolution_url: (instanceRow as Record<string, string>).evolution_url || "",
+      evolution_api_key: (instanceRow as Record<string, string>).evolution_api_key || "",
+      instance_name: instanceName,
+    };
 
     if (event === "messages.upsert") {
-      // Evolution API v2 sends data as a single object; some v1 versions send an array
-      const msgs = Array.isArray(data) ? data : [data];
-      for (const msg of msgs) {
-        const key = msg.key || {};
-        // Normalize JID: @lid -> @s.whatsapp.net to prevent duplicate chat rows
-        const remoteJid = normalizeJid(key.remoteJid || msg.remoteJid || "");
-        const fromMe = key.fromMe ?? false;
-        const messageId = key.id || msg.id || "";
-
-        // Group message metadata
-        const isGroup = remoteJid.endsWith("@g.us");
-        // For group msgs, participant is the actual sender; for 1-on-1 it's empty
-        const senderJid = isGroup ? normalizeJid(key.participant || "") : null;
-        // pushName is the sender's display name in all cases
-        const senderName = isGroup ? (msg.pushName || null) : null;
-
-        console.log("Processing message:", JSON.stringify({ remoteJid, fromMe, messageId, isGroup }).slice(0, 200));
-
-        // Skip invalid JIDs (Evolution internal IDs without @ suffix) and status broadcasts
-        if (!isValidJid(remoteJid) || remoteJid === "status@broadcast") {
-          continue;
-        }
-
-        // Extract message content
-        let content = "";
-        let messageType = "text";
-        let mediaUrl: string | null = null;
-        let needsMediaDownload = false;
-
-        const message = msg.message || {};
-        if (message.conversation) {
-          content = message.conversation;
-        } else if (message.extendedTextMessage?.text) {
-          content = message.extendedTextMessage.text;
-        } else if (message.imageMessage) {
-          messageType = "image";
-          content = message.imageMessage.caption || "📷 Imagem";
-          needsMediaDownload = true;
-        } else if (message.audioMessage) {
-          messageType = "audio";
-          content = "🎵 Áudio";
-          needsMediaDownload = true;
-        } else if (message.videoMessage) {
-          messageType = "video";
-          content = message.videoMessage.caption || "🎥 Vídeo";
-          needsMediaDownload = true;
-        } else if (message.documentMessage) {
-          messageType = "document";
-          content = message.documentMessage.fileName || "📄 Documento";
-          needsMediaDownload = true;
-        } else if (message.stickerMessage) {
-          messageType = "sticker";
-          content = "🎨 Sticker";
-          needsMediaDownload = true;
-        } else {
-          content = "Mensagem não suportada";
-        }
-
-        // Download and store media in our bucket
-        if (needsMediaDownload && messageId) {
-          const storedUrl = await downloadAndStoreMedia(
-            supabase,
-            evoServerUrl(instance.evolution_url),
-            instance.evolution_api_key,
-            instanceName,
-            messageId,
-            messageType,
-          );
-          if (storedUrl) {
-            mediaUrl = storedUrl;
-          }
-        }
-
-        // For groups: contact_name = group subject (or JID part as fallback, sync will update later)
-        //             pushName is the SENDER, not the group name
-        const contactPhone = remoteJid.split("@")[0];
-        const contactName = isGroup
-          ? (msg.message?.groupMetadata?.subject || contactPhone)
-          : (msg.pushName || contactPhone);
-
-        // Fetch profile picture
-        let profilePicUrl: string | null = null;
-        try {
-          const picRes = await fetch(
-            `${evoServerUrl(instance.evolution_url)}/chat/fetchProfilePictureUrl/${instanceName}`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json", apikey: instance.evolution_api_key },
-              body: JSON.stringify({ number: contactPhone }),
-            }
-          );
-          if (picRes.ok) {
-            const picData = await picRes.json();
-            profilePicUrl = picData?.profilePictureUrl || picData?.picture || null;
-          }
-        } catch (e) {
-          console.log("Profile pic fetch failed:", e);
-        }
-
-        // Upsert chat — do NOT include unread_count here to avoid resetting it on
-        // existing chats. The increment is done separately below.
-        const upsertData: Record<string, any> = {
-          whatsapp_instance_id: instance.id,
-          remote_jid: remoteJid,
-          contact_phone: contactPhone,
-          last_message: content,
-          last_message_at: new Date().toISOString(),
-          tenant_id: instance.tenant_id,
-        };
-        // Always set group name; for individual contacts only set on incoming (pushName)
-        if (!fromMe || isGroup) upsertData.contact_name = contactName;
-        if (profilePicUrl) upsertData.profile_picture_url = profilePicUrl;
-
-        const { data: chat, error: chatError } = await supabase
-          .from("whatsapp_chats")
-          .upsert(upsertData, { onConflict: "whatsapp_instance_id,remote_jid" })
-          .select()
-          .single();
-
-        if (chatError) {
-          console.error("Chat upsert error:", chatError);
-          const { data: existingChat } = await supabase
-            .from("whatsapp_chats")
-            .select("*")
-            .eq("whatsapp_instance_id", instance.id)
-            .eq("remote_jid", remoteJid)
-            .single();
-
-          if (existingChat) {
-            await supabase
-              .from("whatsapp_chats")
-              .update({
-                last_message: content,
-                last_message_at: new Date().toISOString(),
-                unread_count: fromMe ? 0 : (existingChat.unread_count || 0) + 1,
-                ...(!fromMe || isGroup ? { contact_name: contactName } : {}),
-              })
-              .eq("id", existingChat.id);
-
-            await supabase.from("whatsapp_messages").insert({
-              chat_id: existingChat.id,
-              from_me: fromMe,
-              remote_jid: remoteJid,
-              message_type: messageType,
-              content,
-              media_url: mediaUrl,
-              status: fromMe ? "sent" : "received",
-              evolution_message_id: messageId,
-              tenant_id: instance.tenant_id,
-              sender_name: senderName,
-              sender_jid: senderJid,
-            });
-          }
-        } else if (chat) {
-          // Increment unread counter for incoming messages (separate update to avoid
-          // resetting the counter via the upsert above)
-          if (!fromMe) {
-            await supabase
-              .from("whatsapp_chats")
-              .update({ unread_count: (chat.unread_count || 0) + 1 })
-              .eq("id", chat.id);
-          }
-
-          // Auto-create lead only for individual contacts (not groups)
-          if (!fromMe && !isGroup) {
-            const tenantId = instance.tenant_id || null;
-
-            let leadQuery = supabase
-              .from("leads")
-              .select("id")
-              .eq("phone", contactPhone);
-            if (tenantId) leadQuery = leadQuery.eq("tenant_id", tenantId);
-
-            const { data: existingLead } = await leadQuery.maybeSingle();
-
-            if (!existingLead) {
-              let clientQuery = supabase
-                .from("clients")
-                .select("id")
-                .eq("phone", contactPhone);
-              if (tenantId) clientQuery = clientQuery.eq("tenant_id", tenantId);
-
-              const { data: existingClient } = await clientQuery.maybeSingle();
-
-              if (!existingClient) {
-                const newLead: Record<string, any> = {
-                  name: contactName || contactPhone,
-                  phone: contactPhone,
-                  source: "WhatsApp",
-                  notes: `Primeira mensagem: ${content}`,
-                  status: "novo",
-                  pipeline_stage: "novo",
-                  whatsapp_instance_id: instance.id,
-                };
-                if (tenantId) newLead.tenant_id = tenantId;
-
-                const { data: createdLead, error: leadError } = await supabase
-                  .from("leads")
-                  .insert(newLead)
-                  .select()
-                  .single();
-
-                if (leadError) {
-                  console.error("Auto-create lead error:", leadError);
-                } else {
-                  console.log("Lead auto-created:", createdLead?.id, contactPhone);
-                }
-              }
-            }
-          }
-
-          // Assign chat to seller based on distribution
-          if (!chat.assigned_to) {
-            const { data: assignments } = await supabase
-              .from("whatsapp_assignments")
-              .select("*")
-              .eq("whatsapp_instance_id", instance.id)
-              .order("percentage", { ascending: false });
-
-            if (assignments && assignments.length > 0) {
-              const { data: chatCounts } = await supabase
-                .from("whatsapp_chats")
-                .select("assigned_to")
-                .eq("whatsapp_instance_id", instance.id)
-                .not("assigned_to", "is", null);
-
-              const counts: Record<string, number> = {};
-              chatCounts?.forEach((c) => {
-                if (c.assigned_to) counts[c.assigned_to] = (counts[c.assigned_to] || 0) + 1;
-              });
-
-              const total = Object.values(counts).reduce((s, v) => s + v, 0) || 1;
-
-              let bestSeller = assignments[0].user_id;
-              let bestGap = -Infinity;
-
-              for (const a of assignments) {
-                const actual = ((counts[a.user_id] || 0) / total) * 100;
-                const gap = a.percentage - actual;
-                if (gap > bestGap) {
-                  bestGap = gap;
-                  bestSeller = a.user_id;
-                }
-              }
-
-              await supabase
-                .from("whatsapp_chats")
-                .update({ assigned_to: bestSeller })
-                .eq("id", chat.id);
-
-              if (contactPhone) {
-                await supabase
-                  .from("leads")
-                  .update({ assigned_to: bestSeller })
-                  .eq("phone", contactPhone)
-                  .is("assigned_to", null);
-              }
-            }
-          }
-
-          // Insert message
-          await supabase.from("whatsapp_messages").insert({
-            chat_id: chat.id,
-            from_me: fromMe,
-            remote_jid: remoteJid,
-            message_type: messageType,
-            content,
-            media_url: mediaUrl,
-            status: fromMe ? "sent" : "received",
-            evolution_message_id: messageId,
-            tenant_id: instance.tenant_id,
-            sender_name: senderName,
-            sender_jid: senderJid,
-          });
-        }
-      }
+      await handleMessagesUpsert(supabase, data, instance, instanceName);
     } else if (event === "messages.update" || event === "messages.edited") {
-      const updates = Array.isArray(data) ? data : [data];
-      for (const upd of updates) {
-        const msgId = upd.key?.id;
-        const status = upd.update?.status;
-        if (msgId && status !== undefined) {
-          const statusMap: Record<number, string> = {
-            2: "sent",
-            3: "delivered",
-            4: "read",
-          };
-          const newStatus = statusMap[status] || "sent";
-          await supabase
-            .from("whatsapp_messages")
-            .update({ status: newStatus })
-            .eq("evolution_message_id", msgId);
-        }
-      }
+      await handleMessagesUpdate(supabase, data);
     } else if (event === "connection.update") {
-      const state = data?.state || data?.status;
-      if (state && instance) {
-        const newStatus = state === "open" ? "connected" : "disconnected";
-        await supabase
-          .from("whatsapp_instances")
-          .update({ status: newStatus })
-          .eq("id", instance.id);
-        console.log(`Connection update for ${instanceName}: ${newStatus}`);
-      }
+      await handleConnectionUpdate(supabase, data, instance);
+    } else if (event === "contacts.upsert" || event === "contacts.update") {
+      await handleContacts(supabase, data, instance);
+    } else if (event === "chats.upsert" || event === "chats.update") {
+      await handleChats(supabase, data, instance);
+    } else {
+      console.log(`[webhook] evento ignorado: ${event}`);
     }
 
     return new Response(JSON.stringify({ ok: true }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
-    console.error("Webhook error:", err);
-    return new Response(JSON.stringify({ error: err.message }), {
-      status: 500,
+    console.error("[webhook] ERROR:", err);
+    // SEMPRE 200 — Evolution não deve retentar
+    return new Response(JSON.stringify({ ok: false, error: String(err) }), {
+      status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
