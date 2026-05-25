@@ -115,6 +115,64 @@ async function fetchProfilePic(evoUrl: string, evoKey: string, instanceName: str
   }
 }
 
+// ── Group name auto-fetch ──────────────────────────────────────────────────
+
+async function fetchGroupNameIfMissing(
+  supabase: ReturnType<typeof createClient>,
+  instance: { id: string; evolution_url: string; evolution_api_key: string },
+  instanceName: string,
+  remoteJid: string,
+): Promise<void> {
+  try {
+    const { data: chat } = await supabase
+      .from("whatsapp_chats")
+      .select("contact_name, custom_name")
+      .eq("whatsapp_instance_id", instance.id)
+      .eq("remote_jid", remoteJid)
+      .single();
+
+    if (!chat) return;
+    if (chat.custom_name && (chat.custom_name as string).trim() !== "") return;
+    if (chat.contact_name && chat.contact_name !== remoteJid) return;
+
+    const evoUrl = (Deno.env.get("EVOLUTION_API_URL") || instance.evolution_url).replace(/\/$/, "");
+    const evoKey = Deno.env.get("EVOLUTION_API_KEY") || instance.evolution_api_key;
+
+    const ctrl = new AbortController();
+    const timeout = setTimeout(() => ctrl.abort(), 10000);
+
+    try {
+      const res = await fetch(
+        `${evoUrl}/group/findGroupInfos/${instanceName}?groupJid=${encodeURIComponent(remoteJid)}`,
+        { headers: { apikey: evoKey }, signal: ctrl.signal },
+      );
+      clearTimeout(timeout);
+
+      if (!res.ok) {
+        console.log(`[fetchGroupName] ${res.status} para ${remoteJid}`);
+        return;
+      }
+
+      const data = await res.json();
+      const subject = (data?.subject || data?.name) as string | undefined;
+      if (!subject) return;
+
+      await supabase
+        .from("whatsapp_chats")
+        .update({ contact_name: subject })
+        .eq("whatsapp_instance_id", instance.id)
+        .eq("remote_jid", remoteJid);
+
+      console.log(`[fetchGroupName] OK: ${remoteJid} → "${subject}"`);
+    } catch (e) {
+      clearTimeout(timeout);
+      console.log(`[fetchGroupName] erro ${remoteJid}:`, (e as Error).message);
+    }
+  } catch (e) {
+    console.log(`[fetchGroupName] outer:`, (e as Error).message);
+  }
+}
+
 // ── Event Handlers ─────────────────────────────────────────────────────────
 
 async function handleMessagesUpsert(
@@ -303,6 +361,11 @@ async function handleMessagesUpsert(
     }
 
     const chatId = targetChat.id as string;
+
+    // Fire-and-forget: preencher nome real de grupos que ainda exibem o JID como nome
+    if (isGroup) {
+      fetchGroupNameIfMissing(supabase, instance, instanceName, remoteJid).catch(() => {});
+    }
 
     // Incrementar não-lidos para mensagens recebidas
     if (!fromMe) {

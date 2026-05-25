@@ -7,7 +7,6 @@ const corsHeaders = {
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-// Env vars têm prioridade sobre colunas da instância (evita SSL issues com IP interno)
 const EVOLUTION_URL_OVERRIDE = Deno.env.get("EVOLUTION_API_URL") || "";
 const EVOLUTION_KEY_OVERRIDE = Deno.env.get("EVOLUTION_API_KEY") || "";
 
@@ -22,43 +21,55 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
 
-  // ── Auth ──────────────────────────────────────────────────────────────────
-  const authHeader = req.headers.get("Authorization");
+  const authHeader = req.headers.get("Authorization") || "";
   if (!authHeader) return respond({ ok: false, error: "Unauthorized" }, 401);
 
-  const supabase = createClient(supabaseUrl, supabaseKey);
-  const token = authHeader.replace("Bearer ", "");
-
-  const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-  if (authError || !user) return respond({ ok: false, error: "Unauthorized" }, 401);
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("tenant_id, role")
-    .eq("id", user.id)
-    .single();
-
-  if (!profile) return respond({ ok: false, error: "Profile not found" }, 403);
-  if (!["admin", "manager"].includes(profile.role as string)) {
-    return respond({ ok: false, error: "Forbidden: admin or manager required" }, 403);
-  }
-
-  const tenantId = profile.tenant_id as string;
-
-  // ── Body ──────────────────────────────────────────────────────────────────
+  // Read body first — needed to detect internal calls before auth
   const body = await req.json().catch(() => ({})) as Record<string, unknown>;
+  const isInternal = body.internal === true;
   const instanceIdFilter = (body.instance_id as string) || null;
+
+  const supabase = createClient(supabaseUrl, supabaseKey);
+  let tenantId: string | null = null;
+
+  if (isInternal) {
+    // ── Chamada interna (health-check, qrcode) — valida com service_role_key ─
+    const token = authHeader.replace(/^Bearer\s+/i, "");
+    if (token !== supabaseKey) {
+      return respond({ ok: false, error: "Unauthorized internal call" }, 401);
+    }
+    // tenantId permanece null; a query usará apenas instance_id
+  } else {
+    // ── Chamada de usuário — JWT obrigatório com role admin/manager ───────────
+    const token = authHeader.replace(/^Bearer\s+/i, "");
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !user) return respond({ ok: false, error: "Unauthorized" }, 401);
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("tenant_id, role")
+      .eq("id", user.id)
+      .single();
+
+    if (!profile) return respond({ ok: false, error: "Profile not found" }, 403);
+    if (!["admin", "manager"].includes(profile.role as string)) {
+      return respond({ ok: false, error: "Forbidden: admin or manager required" }, 403);
+    }
+    tenantId = profile.tenant_id as string;
+  }
 
   // ── Buscar instâncias ─────────────────────────────────────────────────────
   let query = supabase
     .from("whatsapp_instances")
-    .select("id, instance_name, evolution_url, evolution_api_key, status")
-    .eq("tenant_id", tenantId);
+    .select("id, instance_name, evolution_url, evolution_api_key, status");
 
   if (instanceIdFilter) {
     query = query.eq("id", instanceIdFilter);
+  } else if (tenantId) {
+    query = query.eq("tenant_id", tenantId).eq("status", "connected");
   } else {
-    query = query.eq("status", "connected");
+    // Chamada interna sem instance_id — sem-op seguro
+    return respond({ ok: true, instances_processed: 0, groups_updated: 0, errors: [] });
   }
 
   const { data: instances, error: instError } = await query;
@@ -91,7 +102,7 @@ Deno.serve(async (req) => {
           method: "GET",
           headers: { apikey: evoKey },
           signal: AbortSignal.timeout(30000),
-        }
+        },
       );
 
       if (!res.ok) {
@@ -104,7 +115,7 @@ Deno.serve(async (req) => {
 
       const groups = await res.json();
       if (!Array.isArray(groups)) {
-        const msg = `Resposta inesperada da Evolution API: ${JSON.stringify(groups).slice(0, 80)}`;
+        const msg = `Resposta inesperada: ${JSON.stringify(groups).slice(0, 80)}`;
         console.error(`[sync-groups] ${instanceName}: ${msg}`);
         errors.push({ instance_name: instanceName, message: msg });
         continue;

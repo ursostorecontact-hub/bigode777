@@ -193,6 +193,33 @@ Deno.serve(async (_req) => {
         console.error(`[health-check] erro em ${inst.instance_name}:`, e);
         results.push({ id: inst.id, instance_name: inst.instance_name, error: String(e) });
       }
+
+      // Auto-sync de grupos com nome ainda igual ao JID (fire-and-forget)
+      try {
+        const { data: allGroups } = await supabase
+          .from("whatsapp_chats")
+          .select("contact_name, remote_jid")
+          .eq("whatsapp_instance_id", inst.id)
+          .eq("is_group", true);
+
+        const broken = (allGroups || []).filter(
+          (g) => !g.contact_name || g.contact_name === g.remote_jid,
+        );
+
+        if (broken.length > 0) {
+          console.log(`[health-check] ${inst.instance_name}: ${broken.length} grupo(s) sem nome — disparando sync`);
+          fetch(`${supabaseUrl}/functions/v1/whatsapp-sync-groups`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${serviceRoleKey}`,
+            },
+            body: JSON.stringify({ instance_id: inst.id, internal: true }),
+          }).catch((e) => console.log(`[health-check] sync-groups trigger erro:`, e));
+        }
+      } catch (e) {
+        console.log(`[health-check] auto-sync grupos erro em ${inst.instance_name}:`, e);
+      }
     }
 
     console.log("[health-check] concluído:", JSON.stringify(results).slice(0, 500));

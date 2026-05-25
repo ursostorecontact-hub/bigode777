@@ -472,6 +472,15 @@ Deno.serve(async (req) => {
             },
             body: JSON.stringify({ instance_id }),
           }).catch((e) => console.log("whatsapp-sync trigger error:", e));
+          // Sync nomes reais dos grupos imediatamente ao conectar
+          fetch(`${supabaseUrl}/functions/v1/whatsapp-sync-groups`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${serviceRoleKey}`,
+            },
+            body: JSON.stringify({ instance_id, internal: true }),
+          }).catch((e) => console.log("whatsapp-sync-groups trigger error:", e));
         }
       }
 
