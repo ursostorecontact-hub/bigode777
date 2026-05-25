@@ -342,6 +342,7 @@ function InstanceCard({ instance, profiles, onRefresh }: {
   const [deleting, setDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [activatingWebhook, setActivatingWebhook] = useState(false);
+  const [syncingGroups, setSyncingGroups] = useState(false);
   const [connectMode, setConnectMode] = useState<'qr' | 'code'>('qr');
   const [pairingCode, setPairingCode] = useState<string | null>(null);
   const [pairingPhone, setPairingPhone] = useState('');
@@ -463,6 +464,24 @@ function InstanceCard({ instance, profiles, onRefresh }: {
     setPairingLoading(false);
   };
 
+  const handleSyncGroups = async () => {
+    setSyncingGroups(true);
+    try {
+      const result = await callEdgeFn('whatsapp-sync-groups', { instance_id: instance.id });
+      if (!result.ok) throw new Error(result.error || 'Erro desconhecido');
+      toast({
+        title: `${result.groups_updated} grupo${result.groups_updated !== 1 ? 's' : ''} sincronizado${result.groups_updated !== 1 ? 's' : ''}`,
+        description: result.errors?.length
+          ? `${result.errors.length} instância(s) com erro — verifique o console`
+          : undefined,
+      });
+      onRefresh();
+    } catch (err: any) {
+      toast({ title: 'Erro ao sincronizar grupos', description: err.message, variant: 'destructive' });
+    }
+    setSyncingGroups(false);
+  };
+
   const handleActivateWebhook = async () => {
     setActivatingWebhook(true);
     try {
@@ -559,6 +578,10 @@ function InstanceCard({ instance, profiles, onRefresh }: {
             <Button variant="outline" size="sm" onClick={handleActivateWebhook} disabled={activatingWebhook} className="gap-1.5 h-8 text-xs">
               {activatingWebhook ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
               Ativar Webhook
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleSyncGroups} disabled={syncingGroups} className="gap-1.5 h-8 text-xs">
+              {syncingGroups ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Users className="h-3.5 w-3.5" />}
+              Sincronizar Grupos
             </Button>
             <Button variant="ghost" size="icon" onClick={() => setShowDeleteConfirm(true)} disabled={deleting} className="text-muted-foreground hover:text-destructive h-8 w-8">
               {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
