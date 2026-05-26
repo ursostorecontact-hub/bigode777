@@ -15,9 +15,9 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import {
-  Plus, Search, SlidersHorizontal, MoreVertical, Pencil, Trash2,
+  Plus, Search, SlidersHorizontal, MoreVertical, Pencil, Trash2, Copy,
   Download, Upload, ShoppingBag, Package, Tag, CheckSquare, Square,
-  Loader2, ImageOff,
+  Loader2, ImageOff, LayoutGrid, List, Star,
 } from 'lucide-react';
 import { ProductModal } from '@/components/catalog/ProductModal';
 import { CategoryEditor } from '@/components/catalog/CategoryEditor';
@@ -32,8 +32,8 @@ import { cn } from '@/lib/utils';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-function formatPrice(price: number | null) {
-  if (price === null) return '—';
+function formatPrice(price: number | null | undefined) {
+  if (price == null) return '—';
   return price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
@@ -144,19 +144,105 @@ function CsvImportPanel({ onClose }: { onClose: () => void }) {
   );
 }
 
-// ── ProductRow ─────────────────────────────────────────────────────────────────
+// ── ProductCard (grade) ────────────────────────────────────────────────────────
+
+interface ProductCardProps {
+  product: Product;
+  onEdit: (product: Product) => void;
+  onDuplicate: (product: Product) => void;
+  onDelete: (id: string) => void;
+  isReadOnly: boolean;
+}
+
+function ProductCard({ product, onEdit, onDuplicate, onDelete, isReadOnly }: ProductCardProps) {
+  const cover = product.images?.[0];
+  const hasPromo = product.promotional_price != null && product.promotional_price < (product.price ?? Infinity);
+
+  return (
+    <Card className="group overflow-hidden hover:shadow-md transition-shadow">
+      <div
+        className="relative aspect-square bg-muted cursor-pointer"
+        onClick={() => !isReadOnly && onEdit(product)}
+      >
+        {cover
+          ? <img src={cover} alt={product.name} className="w-full h-full object-cover" />
+          : <div className="w-full h-full flex items-center justify-center">
+              <ImageOff className="h-8 w-8 text-muted-foreground/30" />
+            </div>}
+        <div className="absolute top-2 left-2 flex flex-col gap-1">
+          {product.is_featured && (
+            <Badge className="gap-1 text-[10px] h-5 bg-amber-500 hover:bg-amber-500 shadow">
+              <Star className="h-2.5 w-2.5" />Destaque
+            </Badge>
+          )}
+          {!product.is_active && (
+            <Badge variant="secondary" className="text-[10px] h-5 shadow">Inativo</Badge>
+          )}
+        </div>
+        {!isReadOnly && (
+          <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="secondary" size="icon" className="h-7 w-7 shadow"
+                  onClick={(e) => e.stopPropagation()}>
+                  <MoreVertical className="h-3.5 w-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => onEdit(product)}>
+                  <Pencil className="h-4 w-4 mr-2" />Editar
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onDuplicate(product)}>
+                  <Copy className="h-4 w-4 mr-2" />Duplicar
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="text-destructive focus:text-destructive"
+                  onClick={() => onDelete(product.id)}>
+                  <Trash2 className="h-4 w-4 mr-2" />Remover
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        )}
+      </div>
+
+      <CardContent className="p-3 space-y-1">
+        <p className="text-sm font-medium truncate">{product.name}</p>
+        <p className="text-xs text-muted-foreground truncate">
+          {product.sku ? `SKU: ${product.sku}` : product.product_categories?.name ?? 'Sem categoria'}
+        </p>
+        <div className="flex items-center gap-2">
+          {hasPromo ? (
+            <>
+              <span className="text-sm font-bold text-green-600">{formatPrice(product.promotional_price)}</span>
+              <span className="text-xs text-muted-foreground line-through">{formatPrice(product.price)}</span>
+            </>
+          ) : (
+            <span className="text-sm font-medium">{formatPrice(product.price)}</span>
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground">Estoque: {product.stock}</p>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ── ProductRow (lista) ─────────────────────────────────────────────────────────
 
 interface ProductRowProps {
   product: Product;
   selected: boolean;
   onSelect: (id: string, checked: boolean) => void;
   onEdit: (product: Product) => void;
+  onDuplicate: (product: Product) => void;
   onDelete: (id: string) => void;
   isReadOnly: boolean;
 }
 
-function ProductRow({ product, selected, onSelect, onEdit, onDelete, isReadOnly }: ProductRowProps) {
+function ProductRow({ product, selected, onSelect, onEdit, onDuplicate, onDelete, isReadOnly }: ProductRowProps) {
   const cover = product.images?.[0];
+  const hasPromo = product.promotional_price != null && product.promotional_price < (product.price ?? Infinity);
+
   return (
     <div className={cn(
       'flex items-center gap-3 px-3 py-2.5 rounded-lg border hover:bg-muted/30 transition-colors',
@@ -178,7 +264,10 @@ function ProductRow({ product, selected, onSelect, onEdit, onDelete, isReadOnly 
       </div>
 
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium truncate">{product.name}</p>
+        <div className="flex items-center gap-1.5">
+          <p className="text-sm font-medium truncate">{product.name}</p>
+          {product.is_featured && <Star className="h-3 w-3 text-amber-500 shrink-0" />}
+        </div>
         <p className="text-xs text-muted-foreground truncate">
           {product.sku ? `SKU: ${product.sku}` : 'Sem SKU'}
           {product.product_categories?.name ? ` · ${product.product_categories.name}` : ''}
@@ -187,8 +276,17 @@ function ProductRow({ product, selected, onSelect, onEdit, onDelete, isReadOnly 
 
       <div className="hidden sm:flex items-center gap-6 text-sm text-right">
         <div>
-          <p className="font-medium tabular-nums">{formatPrice(product.price)}</p>
-          <p className="text-xs text-muted-foreground">preço</p>
+          {hasPromo ? (
+            <>
+              <p className="font-medium tabular-nums text-green-600">{formatPrice(product.promotional_price)}</p>
+              <p className="text-xs text-muted-foreground line-through tabular-nums">{formatPrice(product.price)}</p>
+            </>
+          ) : (
+            <>
+              <p className="font-medium tabular-nums">{formatPrice(product.price)}</p>
+              <p className="text-xs text-muted-foreground">preço</p>
+            </>
+          )}
         </div>
         <div>
           <p className="font-medium tabular-nums">{product.stock}</p>
@@ -210,6 +308,9 @@ function ProductRow({ product, selected, onSelect, onEdit, onDelete, isReadOnly 
           <DropdownMenuContent align="end">
             <DropdownMenuItem onClick={() => onEdit(product)}>
               <Pencil className="h-4 w-4 mr-2" />Editar
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onDuplicate(product)}>
+              <Copy className="h-4 w-4 mr-2" />Duplicar
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem className="text-destructive focus:text-destructive"
@@ -240,12 +341,14 @@ export default function CatalogPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [catSheetOpen, setCatSheetOpen] = useState(false);
   const [importSheetOpen, setImportSheetOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
 
   const { data: products = [], isLoading } = useProducts(filters);
   const { data: categories = [] } = useProductCategories();
   const deleteProduct = useDeleteProduct();
   const bulkUpdate = useBulkUpdateProducts();
   const bulkDelete = useBulkDeleteProducts();
+  const createProduct = useCreateProduct();
 
   const setFilter = <K extends keyof ProductFilters>(key: K, val: ProductFilters[K]) =>
     setFilters((f) => ({ ...f, [key]: val }));
@@ -264,15 +367,35 @@ export default function CatalogPage() {
   const openEdit = (p: Product) => { setEditingProduct(p); setModalOpen(true); };
   const openNew = () => { setEditingProduct(null); setModalOpen(true); };
 
+  const handleDuplicate = (p: Product) => {
+    createProduct.mutate({
+      name: `${p.name} (cópia)`,
+      description: p.description ?? undefined,
+      price: p.price ?? undefined,
+      promotional_price: p.promotional_price ?? undefined,
+      stock: p.stock,
+      sku: p.sku ? `${p.sku}-COPY` : undefined,
+      category_id: p.category_id,
+      images: p.images ?? [],
+      is_active: false,
+      is_featured: false,
+      attributes: p.attributes ?? {},
+      ai_keywords: p.ai_keywords ?? undefined,
+      ai_sales_pitch: p.ai_sales_pitch ?? undefined,
+    });
+  };
+
   const exportCSV = () => {
-    const header = ['id', 'nome', 'preco', 'estoque', 'sku', 'categoria', 'ativo', 'criado_em'];
+    const header = ['id', 'nome', 'preco', 'preco_promocional', 'estoque', 'sku', 'categoria', 'ativo', 'destaque', 'criado_em'];
     const rows = products.map((p) => [
       p.id, `"${p.name}"`,
       p.price ?? '',
+      p.promotional_price ?? '',
       p.stock,
       p.sku ?? '',
       p.product_categories?.name ?? '',
       p.is_active ? 'sim' : 'não',
+      p.is_featured ? 'sim' : 'não',
       new Date(p.created_at).toLocaleDateString('pt-BR'),
     ]);
     const csv = [header, ...rows].map((r) => r.join(',')).join('\n');
@@ -344,7 +467,7 @@ export default function CatalogPage() {
         </div>
       </div>
 
-      {/* Filters */}
+      {/* Filters + view toggle */}
       <div className="flex gap-2 flex-wrap">
         <form onSubmit={handleSearch} className="flex gap-2 flex-1 min-w-52">
           <div className="relative flex-1">
@@ -418,10 +541,34 @@ export default function CatalogPage() {
             <SelectItem value="stock-desc">Maior estoque</SelectItem>
           </SelectContent>
         </Select>
+
+        {/* View toggle */}
+        <div className="flex rounded-md border overflow-hidden">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className={cn('h-9 w-9 rounded-none', viewMode === 'list' && 'bg-muted')}
+            onClick={() => setViewMode('list')}
+            title="Visualização em lista"
+          >
+            <List className="h-4 w-4" />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className={cn('h-9 w-9 rounded-none', viewMode === 'grid' && 'bg-muted')}
+            onClick={() => setViewMode('grid')}
+            title="Visualização em grade"
+          >
+            <LayoutGrid className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
-      {/* Bulk actions — only for admin/manager */}
-      {!isReadOnly && selected.size > 0 && (
+      {/* Bulk actions — only for admin/manager, list mode only */}
+      {!isReadOnly && selected.size > 0 && viewMode === 'list' && (
         <div className="flex items-center gap-3 px-3 py-2 bg-primary/5 border border-primary/20 rounded-lg flex-wrap">
           <span className="text-sm font-medium">{selected.size} selecionado(s)</span>
           <Separator orientation="vertical" className="h-4" />
@@ -448,67 +595,85 @@ export default function CatalogPage() {
         </div>
       )}
 
-      {/* Product list */}
-      <div className="space-y-2">
-        {!isReadOnly && products.length > 0 && (
-          <div className="flex items-center gap-3 px-3 pb-1">
-            <button type="button" onClick={toggleAll} className="text-muted-foreground hover:text-foreground">
-              {selected.size === products.length && products.length > 0
-                ? <CheckSquare className="h-4 w-4 text-primary" />
-                : <Square className="h-4 w-4" />}
-            </button>
-            <span className="text-xs text-muted-foreground">
-              {products.length} produto(s)
-              {filters.search ? ` para "${filters.search}"` : ''}
-            </span>
-          </div>
-        )}
-        {isReadOnly && products.length > 0 && (
-          <p className="text-xs text-muted-foreground px-3 pb-1">
-            {products.length} produto(s)
-            {filters.search ? ` para "${filters.search}"` : ''}
+      {/* Product content */}
+      {isLoading ? (
+        <div className="flex items-center justify-center py-16">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      ) : products.length === 0 ? (
+        <Card className="border-dashed">
+          <CardContent className="flex flex-col items-center justify-center py-16 gap-4">
+            <div className="p-4 rounded-2xl bg-muted/50">
+              <Package className="h-10 w-10 text-muted-foreground/40" />
+            </div>
+            <div className="text-center space-y-1">
+              <p className="font-medium">Nenhum produto encontrado</p>
+              <p className="text-sm text-muted-foreground">
+                {filters.search || filters.category_id || filters.is_active !== null
+                  ? 'Tente ajustar os filtros'
+                  : 'Comece criando seu primeiro produto'}
+              </p>
+            </div>
+            {!isReadOnly && !filters.search && !filters.category_id && (filters.is_active === null || filters.is_active === undefined) && (
+              <Button onClick={openNew}>
+                <Plus className="h-4 w-4 mr-2" />Criar produto
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+      ) : viewMode === 'grid' ? (
+        /* Grade */
+        <div className="space-y-2">
+          <p className="text-xs text-muted-foreground px-1">
+            {products.length} produto(s){filters.search ? ` para "${filters.search}"` : ''}
           </p>
-        )}
-
-        {isLoading ? (
-          <div className="flex items-center justify-center py-16">
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+            {products.map((p) => (
+              <ProductCard
+                key={p.id}
+                product={p}
+                onEdit={openEdit}
+                onDuplicate={handleDuplicate}
+                onDelete={setDeleteId}
+                isReadOnly={isReadOnly}
+              />
+            ))}
           </div>
-        ) : products.length === 0 ? (
-          <Card className="border-dashed">
-            <CardContent className="flex flex-col items-center justify-center py-16 gap-4">
-              <div className="p-4 rounded-2xl bg-muted/50">
-                <Package className="h-10 w-10 text-muted-foreground/40" />
-              </div>
-              <div className="text-center space-y-1">
-                <p className="font-medium">Nenhum produto encontrado</p>
-                <p className="text-sm text-muted-foreground">
-                  {filters.search || filters.category_id || filters.is_active !== null
-                    ? 'Tente ajustar os filtros'
-                    : 'Comece criando seu primeiro produto'}
-                </p>
-              </div>
-              {!isReadOnly && !filters.search && !filters.category_id && (filters.is_active === null || filters.is_active === undefined) && (
-                <Button onClick={openNew}>
-                  <Plus className="h-4 w-4 mr-2" />Criar produto
-                </Button>
-              )}
-            </CardContent>
-          </Card>
-        ) : (
-          products.map((p) => (
+        </div>
+      ) : (
+        /* Lista */
+        <div className="space-y-2">
+          {!isReadOnly && products.length > 0 && (
+            <div className="flex items-center gap-3 px-3 pb-1">
+              <button type="button" onClick={toggleAll} className="text-muted-foreground hover:text-foreground">
+                {selected.size === products.length && products.length > 0
+                  ? <CheckSquare className="h-4 w-4 text-primary" />
+                  : <Square className="h-4 w-4" />}
+              </button>
+              <span className="text-xs text-muted-foreground">
+                {products.length} produto(s){filters.search ? ` para "${filters.search}"` : ''}
+              </span>
+            </div>
+          )}
+          {isReadOnly && products.length > 0 && (
+            <p className="text-xs text-muted-foreground px-3 pb-1">
+              {products.length} produto(s){filters.search ? ` para "${filters.search}"` : ''}
+            </p>
+          )}
+          {products.map((p) => (
             <ProductRow
               key={p.id}
               product={p}
               selected={selected.has(p.id)}
               onSelect={toggleSelect}
               onEdit={openEdit}
+              onDuplicate={handleDuplicate}
               onDelete={setDeleteId}
               isReadOnly={isReadOnly}
             />
-          ))
-        )}
-      </div>
+          ))}
+        </div>
+      )}
 
       {!isReadOnly && (
         <ProductModal

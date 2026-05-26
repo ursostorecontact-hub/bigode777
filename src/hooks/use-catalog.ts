@@ -20,11 +20,16 @@ export interface Product {
   name: string;
   description: string | null;
   price: number | null;
+  promotional_price: number | null;
   stock: number;
   sku: string | null;
   category_id: string | null;
   images: string[];
   is_active: boolean;
+  is_featured: boolean;
+  attributes: Record<string, string>;
+  ai_keywords: string | null;
+  ai_sales_pitch: string | null;
   created_at: string;
   updated_at: string;
   product_categories?: ProductCategory | null;
@@ -44,11 +49,16 @@ export interface CreateProductInput {
   name: string;
   description?: string;
   price?: number | null;
+  promotional_price?: number | null;
   stock?: number;
   sku?: string;
   category_id?: string | null;
   images?: string[];
   is_active?: boolean;
+  is_featured?: boolean;
+  attributes?: Record<string, string>;
+  ai_keywords?: string;
+  ai_sales_pitch?: string;
 }
 
 export interface UpdateProductInput extends Partial<CreateProductInput> {
