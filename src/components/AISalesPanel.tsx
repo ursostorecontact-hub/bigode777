@@ -23,6 +23,9 @@ interface SalesResponse {
   productsToShow: string[];
   confidence: number;
   requiresHumanHandoff: boolean;
+  tokens_input?: number;
+  tokens_output?: number;
+  cost_brl?: number;
 }
 
 interface Props {
@@ -207,9 +210,15 @@ export function AISalesPanel({ chatId, contactName, messages, onApplySuggestion,
 
       {/* Footer info */}
       <div className="px-3 py-2 border-t border-border">
-        <p className="text-[10px] text-muted-foreground/60 text-center">
-          Powered by Claude · Revise antes de enviar
-        </p>
+        {aiResult?.tokens_input ? (
+          <p className="text-[10px] text-muted-foreground/60 text-center">
+            {(aiResult.tokens_input ?? 0) + (aiResult.tokens_output ?? 0)} tokens · R$ {(aiResult.cost_brl ?? 0).toFixed(4)} · Revise antes de enviar
+          </p>
+        ) : (
+          <p className="text-[10px] text-muted-foreground/60 text-center">
+            Powered by Claude · Revise antes de enviar
+          </p>
+        )}
       </div>
     </div>
   );

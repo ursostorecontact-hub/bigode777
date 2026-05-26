@@ -458,7 +458,25 @@ async function handleMessagesUpsert(
       sender_jid: senderJid,
     });
     if (msgError) console.error("[webhook] insert message error:", msgError);
+
+    // Fire-and-forget: AI auto-response (apenas mensagens recebidas em chats individuais)
+    if (!fromMe && !isGroup && !msgError) {
+      triggerAiSalesAgent(chatId, instance.tenant_id).catch(() => {});
+    }
   }
+}
+
+async function triggerAiSalesAgent(chatId: string, tenantId: string): Promise<void> {
+  const url = `${supabaseUrl}/functions/v1/ai-sales-agent`;
+  await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${supabaseKey}`,
+    },
+    body: JSON.stringify({ chatId, tenantId, trigger_type: "auto", internal: true }),
+    signal: AbortSignal.timeout(60000),
+  });
 }
 
 async function handleMessagesUpdate(

@@ -52,6 +52,12 @@ const AI_MODES = [
   { value: 'automatic', label: 'Automático', desc: 'IA responde automaticamente (cuidado!)' },
 ];
 
+interface AiUsage {
+  current: number;
+  limit: number;
+  costBrl: number;
+}
+
 function AiSettingsSection() {
   const { toast } = useToast();
   const [aiEnabled, setAiEnabled] = useState(false);
@@ -61,6 +67,7 @@ function AiSettingsSection() {
   const [workEnd, setWorkEnd] = useState('18:00');
   const [escalationKeywords, setEscalationKeywords] = useState('reclamação, cancelar, reembolso, devolução, procon');
   const [saving, setSaving] = useState(false);
+  const [usageStats, setUsageStats] = useState<AiUsage | null>(null);
 
   useEffect(() => {
     supabase.from('ai_settings').select('*').maybeSingle().then(({ data }) => {
@@ -71,6 +78,11 @@ function AiSettingsSection() {
         setWorkStart(data.work_start ?? '08:00');
         setWorkEnd(data.work_end ?? '18:00');
         setEscalationKeywords(data.escalation_keywords ?? 'reclamação, cancelar, reembolso, devolução, procon');
+        setUsageStats({
+          current: data.current_month_usage ?? 0,
+          limit: data.monthly_conversation_limit ?? 2000,
+          costBrl: data.total_cost_brl ?? 0,
+        });
       }
     });
   }, []);
@@ -181,6 +193,27 @@ function AiSettingsSection() {
           />
           <p className="text-xs text-muted-foreground">Separe por vírgula. Quando detectadas, a IA avisa para assumir o atendimento.</p>
         </div>
+
+        {usageStats && (
+          <div className="rounded-lg bg-muted/40 border p-3 space-y-2 text-sm">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-muted-foreground">Conversas este mês</span>
+              <span className="font-medium">{usageStats.current} / {usageStats.limit}</span>
+            </div>
+            <div className="h-1.5 rounded-full bg-border overflow-hidden">
+              <div
+                className="h-full rounded-full bg-primary transition-all"
+                style={{ width: `${Math.min((usageStats.current / usageStats.limit) * 100, 100)}%` }}
+              />
+            </div>
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-muted-foreground">Custo estimado</span>
+              <span className="font-medium">
+                R$ {usageStats.costBrl.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
+              </span>
+            </div>
+          </div>
+        )}
 
         <div className="flex justify-end">
           <Button onClick={handleSave} disabled={saving}>
