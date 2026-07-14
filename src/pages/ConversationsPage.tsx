@@ -12,6 +12,10 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
+} from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
 import {
   MessageSquare, Send, Loader2, Search, Phone, ArrowLeft,
@@ -456,6 +460,7 @@ function MessageArea({
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const audio = useAudioRecorder();
   const { data: quickReplies } = useQuickReplies();
@@ -627,10 +632,17 @@ function MessageArea({
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const handleDeleteMessage = async (msgId: string) => {
+  const handleDeleteMessage = (msgId: string) => {
+    setDeleteTarget(msgId);
+  };
+
+  const confirmDeleteMessage = async (deleteForEveryone: boolean) => {
+    if (!deleteTarget) return;
+    const msgId = deleteTarget;
+    setDeleteTarget(null);
     try {
-      await deleteMessage.mutateAsync({ messageId: msgId, chatId });
-      toast({ title: 'Mensagem apagada' });
+      await deleteMessage.mutateAsync({ messageId: msgId, chatId, deleteForEveryone });
+      toast({ title: deleteForEveryone ? 'Mensagem apagada para o cliente e no CRM' : 'Mensagem apagada só no CRM' });
     } catch (err: any) {
       toast({ title: 'Erro ao apagar', description: err.message, variant: 'destructive' });
     }
@@ -1016,6 +1028,33 @@ function MessageArea({
         />
       )}
       <QuickReplyManagerDialog open={quickReplyManagerOpen} onOpenChange={setQuickReplyManagerOpen} />
+
+      {/* Escolha de como apagar a mensagem */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Apagar mensagem</AlertDialogTitle>
+            <AlertDialogDescription>
+              Escolha como deseja apagar esta mensagem.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col gap-2 sm:flex-col sm:space-x-0">
+            <AlertDialogAction
+              onClick={() => confirmDeleteMessage(false)}
+              className="w-full bg-secondary text-secondary-foreground hover:bg-secondary/80"
+            >
+              Apagar só no CRM (mantém no WhatsApp do cliente)
+            </AlertDialogAction>
+            <AlertDialogAction
+              onClick={() => confirmDeleteMessage(true)}
+              className="w-full bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Apagar para o cliente também
+            </AlertDialogAction>
+            <AlertDialogCancel className="w-full mt-0">Cancelar</AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       </div>{/* end chat column */}
 
       {/* ── AI Sales Panel ── */}

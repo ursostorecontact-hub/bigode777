@@ -35,7 +35,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { action, chat_id, content, message_type = "text", media_base64, media_mimetype, media_filename, phone, instance_id, message_id } = await req.json();
+    const { action, chat_id, content, message_type = "text", media_base64, media_mimetype, media_filename, phone, instance_id, message_id, delete_for_everyone = true } = await req.json();
 
     if (action === "send") {
       if (!chat_id) {
@@ -307,7 +307,8 @@ Deno.serve(async (req) => {
       }
 
       // Try to delete on WhatsApp via Evolution API if it's our message
-      if (msg.from_me && msg.evolution_message_id) {
+      // (só quando o usuário escolheu apagar também para o cliente)
+      if (delete_for_everyone && msg.from_me && msg.evolution_message_id) {
         const { data: instance } = await supabase
           .from("whatsapp_instances")
           .select("*")
@@ -339,11 +340,21 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Soft delete in DB
-      await supabase
-        .from("whatsapp_messages")
-        .update({ deleted_at: new Date().toISOString(), deleted_by: user.id })
-        .eq("id", message_id);
+      if (delete_for_everyone) {
+        // Soft delete: mensagem também foi apagada no WhatsApp do cliente,
+        // então mostramos "Apagada para o cliente" no histórico do CRM.
+        await supabase
+          .from("whatsapp_messages")
+          .update({ deleted_at: new Date().toISOString(), deleted_by: user.id })
+          .eq("id", message_id);
+      } else {
+        // Apaga só no CRM: remove o registro por completo, sem mexer na mensagem
+        // real do WhatsApp, que continua intacta no celular do cliente.
+        await supabase
+          .from("whatsapp_messages")
+          .delete()
+          .eq("id", message_id);
+      }
 
       return new Response(JSON.stringify({ ok: true }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },

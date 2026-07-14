@@ -149,7 +149,7 @@ export function useMarkChatRead() {
 export function useDeleteWhatsAppMessage() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ messageId, chatId }: { messageId: string; chatId: string }) => {
+    mutationFn: async ({ messageId, chatId, deleteForEveryone = true }: { messageId: string; chatId: string; deleteForEveryone?: boolean }) => {
       const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/whatsapp-send`,
@@ -159,7 +159,7 @@ export function useDeleteWhatsAppMessage() {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${session?.access_token}`,
           },
-          body: JSON.stringify({ action: 'delete_message', message_id: messageId }),
+          body: JSON.stringify({ action: 'delete_message', message_id: messageId, delete_for_everyone: deleteForEveryone }),
         }
       );
       const data = await res.json();
