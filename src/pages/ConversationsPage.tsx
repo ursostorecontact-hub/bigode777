@@ -498,7 +498,10 @@ function MessageArea({
         content: qr.content || '',
         messageType: qr.type,
         mediaBase64: base64,
-        mediaMimetype: qr.media_mimetype || undefined,
+        // Áudio sempre é enviado como audio/ogg — é o formato que a função whatsapp-send
+        // salva no storage e envia pra Evolution API/WhatsApp. Usar o mimetype real do
+        // arquivo (ex: audio/webm de gravações do navegador) faz o áudio chegar mudo.
+        mediaMimetype: qr.type === 'audio' ? 'audio/ogg' : (qr.media_mimetype || undefined),
       });
     } catch (err: any) {
       toast({ title: 'Erro ao enviar mensagem rápida', description: err.message, variant: 'destructive' });
