@@ -78,12 +78,18 @@ Deno.serve(async (req) => {
 
     const newUserId = newUser.user.id;
 
-    // Set role if not default salesperson
-    if (role && role !== "salesperson") {
-      await adminClient
-        .from("user_roles")
-        .update({ role })
-        .eq("user_id", newUserId);
+    // Define o cargo de forma robusta e autocontida: remove qualquer linha de cargo
+    // que já exista para esse usuário (ex: a linha padrão "salesperson" inserida pelo
+    // trigger handle_new_user) e insere exatamente UMA linha com o cargo correto.
+    // Isso evita duplicidade de cargo e garante que o cargo escolhido na criação
+    // seja sempre o que prevalece.
+    const finalRole = role || "salesperson";
+    await adminClient.from("user_roles").delete().eq("user_id", newUserId);
+    const { error: roleInsertError } = await adminClient
+      .from("user_roles")
+      .insert({ user_id: newUserId, role: finalRole });
+    if (roleInsertError) {
+      console.error("Erro ao definir cargo do novo usuário:", roleInsertError.message);
     }
 
     // Associate new user with tenant
