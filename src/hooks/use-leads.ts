@@ -37,6 +37,29 @@ export function useProfiles() {
   });
 }
 
+export function useSaveDistributionPercentages() {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async (percentages: Record<string, number>) => {
+      const results = await Promise.all(
+        Object.entries(percentages).map(([userId, pct]) =>
+          supabase.from('profiles').update({ distribution_percentage: pct }).eq('id', userId)
+        )
+      );
+      const failed = results.find((r) => r.error);
+      if (failed?.error) throw failed.error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['profiles'] });
+      toast({ title: 'Distribuição automática ativada!', description: 'A partir de agora, novos leads já chegam direto pro vendedor certo.' });
+    },
+    onError: (err: any) => {
+      toast({ title: 'Erro ao salvar', description: err.message, variant: 'destructive' });
+    },
+  });
+}
+
 export function useUpdateMaxLeads() {
   const qc = useQueryClient();
   const { toast } = useToast();

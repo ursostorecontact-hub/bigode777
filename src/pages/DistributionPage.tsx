@@ -4,8 +4,8 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
-import { Users, ArrowRight, AlertTriangle, Loader2, Shuffle, BarChart3, Percent } from 'lucide-react';
-import { useLeads, useProfiles, useUpdateLead, useUpdateMaxLeads } from '@/hooks/use-leads';
+import { Users, ArrowRight, AlertTriangle, Loader2, Shuffle, BarChart3, Percent, Zap } from 'lucide-react';
+import { useLeads, useProfiles, useUpdateLead, useUpdateMaxLeads, useSaveDistributionPercentages } from '@/hooks/use-leads';
 import { useWhatsAppInstances, useWhatsAppAssignments } from '@/hooks/use-integrations';
 import { formatCurrency } from '@/types/crm';
 import { useToast } from '@/hooks/use-toast';
@@ -17,6 +17,7 @@ export default function DistributionPage() {
   const { data: profiles } = useProfiles();
   const updateLead = useUpdateLead();
   const updateMaxLeads = useUpdateMaxLeads();
+  const saveDistribution = useSaveDistributionPercentages();
   const { toast } = useToast();
   const [assignments, setAssignments] = useState<Record<string, string>>({});
   const [mode, setMode] = useState<DistributionMode>('manual');
@@ -30,19 +31,28 @@ export default function DistributionPage() {
 
   const unassigned = allLeads.filter(l => !l.assigned_to && l.status !== 'ganho' && l.status !== 'perdido');
 
-  // Initialize percentages when profiles load
+  // Initialize percentages when profiles load — usa o que já foi salvo antes, se houver
   useEffect(() => {
     if (allProfiles.length > 0 && Object.keys(percentages).length === 0) {
-      const equal = Math.floor(100 / allProfiles.length);
-      const remainder = 100 - equal * allProfiles.length;
-      const init: Record<string, number> = {};
-      allProfiles.forEach((p, i) => {
-        init[p.id] = equal + (i === 0 ? remainder : 0);
-      });
-      setPercentages(init);
+      const hasSaved = allProfiles.some((p: any) => p.distribution_percentage != null);
+      if (hasSaved) {
+        const init: Record<string, number> = {};
+        allProfiles.forEach((p: any) => { init[p.id] = p.distribution_percentage || 0; });
+        setPercentages(init);
+      } else {
+        const equal = Math.floor(100 / allProfiles.length);
+        const remainder = 100 - equal * allProfiles.length;
+        const init: Record<string, number> = {};
+        allProfiles.forEach((p, i) => {
+          init[p.id] = equal + (i === 0 ? remainder : 0);
+        });
+        setPercentages(init);
+      }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allProfiles.length]);
+
+  const autoDistributionActive = allProfiles.some((p: any) => (p.distribution_percentage || 0) > 0);
 
   const totalPercentage = Object.values(percentages).reduce((s, v) => s + v, 0);
 
@@ -320,6 +330,25 @@ export default function DistributionPage() {
               </p>
             </div>
             <p className="text-sm text-muted-foreground">{unassigned.length} leads para distribuir</p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              disabled={totalPercentage !== 100 || saveDistribution.isPending}
+              onClick={() => saveDistribution.mutate(percentages)}
+            >
+              {saveDistribution.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
+              Ativar Distribuição Automática
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {autoDistributionActive && (
+        <Card className="border-success/30 bg-success/5">
+          <CardContent className="p-3 flex items-center gap-2 text-sm text-success">
+            <Zap className="h-4 w-4" />
+            Distribuição automática está <strong>ativa</strong> — novos leads já chegam direto pro vendedor certo, seguindo as porcentagens salvas.
           </CardContent>
         </Card>
       )}
