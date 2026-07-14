@@ -16,7 +16,7 @@ import { Label } from '@/components/ui/label';
 import {
   MessageSquare, Send, Loader2, Search, Phone, ArrowLeft,
   Check, CheckCheck, Clock, Mic, MicOff, UserPlus, Paperclip,
-  Image as ImageIcon, Video, FileText, X, Trash2, Tag, Settings2, Sparkles, Users,
+  Image as ImageIcon, Video, FileText, X, Trash2, Tag, Settings2, Sparkles, Users, Zap,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { AISalesPanel } from '@/components/AISalesPanel';
@@ -32,6 +32,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useLabels, useLabelAssignments, useAssignLabel, useUnassignLabel } from '@/hooks/use-labels';
 import { LabelManagerDialog, LabelAssignPopover, LabelBadges } from '@/components/LabelManager';
 import { useAudioRecorder } from '@/hooks/useAudioRecorder';
+import { useQuickReplies, fetchMediaAsBase64, type QuickReply } from '@/hooks/use-quick-replies';
+import { QuickReplyManagerDialog } from '@/components/QuickReplyManager';
 
 // Returns true when a media_url is publicly accessible by the browser.
 // URLs pointing to localhost, private IPs, or internal hostnames are not accessible.
@@ -456,10 +458,54 @@ function MessageArea({
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [sending, setSending] = useState(false);
   const audio = useAudioRecorder();
+  const { data: quickReplies } = useQuickReplies();
+  const [quickReplyManagerOpen, setQuickReplyManagerOpen] = useState(false);
+  const [quickReplyIndex, setQuickReplyIndex] = useState(0);
+  const textInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // Detecta se o usuário está digitando um atalho de mensagem rápida (ex: "/orc")
+  // Só ativa quando a "/" é o primeiro caractere do texto (sem espaços depois).
+  const slashMatch = /^\/([a-zA-Z0-9_-]*)$/.exec(text);
+  const quickReplyQuery = slashMatch ? slashMatch[1].toLowerCase() : null;
+  const filteredQuickReplies: QuickReply[] =
+    quickReplyQuery !== null
+      ? (quickReplies || []).filter((qr) => qr.shortcut.toLowerCase().startsWith(quickReplyQuery))
+      : [];
+  const showQuickReplyMenu = quickReplyQuery !== null && filteredQuickReplies.length > 0;
+
+  useEffect(() => {
+    setQuickReplyIndex(0);
+  }, [text]);
+
+  const handleSelectQuickReply = async (qr: QuickReply) => {
+    setText('');
+    if (qr.type === 'text') {
+      setText(qr.content || '');
+      textInputRef.current?.focus();
+      return;
+    }
+    // Mídia (foto, vídeo, áudio, documento): envia direto, pois não dá pra "editar" no campo de texto
+    if (!qr.media_url) return;
+    setSending(true);
+    try {
+      const base64 = await fetchMediaAsBase64(qr.media_url);
+      await sendMessage.mutateAsync({
+        chatId,
+        content: qr.content || '',
+        messageType: qr.type,
+        mediaBase64: base64,
+        mediaMimetype: qr.media_mimetype || undefined,
+      });
+    } catch (err: any) {
+      toast({ title: 'Erro ao enviar mensagem rápida', description: err.message, variant: 'destructive' });
+    } finally {
+      setSending(false);
+    }
+  };
 
   useEffect(() => {
     if (chatId && chat?.unread_count > 0) {
@@ -479,6 +525,27 @@ function MessageArea({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (showQuickReplyMenu) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setQuickReplyIndex((i) => (i + 1) % filteredQuickReplies.length);
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setQuickReplyIndex((i) => (i - 1 + filteredQuickReplies.length) % filteredQuickReplies.length);
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        handleSelectQuickReply(filteredQuickReplies[quickReplyIndex]);
+        return;
+      }
+      if (e.key === 'Escape') {
+        setText('');
+        return;
+      }
+    }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
@@ -602,6 +669,15 @@ function MessageArea({
           )}
         </div>
         <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9"
+            title="Gerenciar mensagens rápidas"
+            onClick={() => setQuickReplyManagerOpen(true)}
+          >
+            <Zap className="h-4 w-4 text-muted-foreground" />
+          </Button>
           {onToggleAI && (
             <Button
               variant={aiPanelOpen ? 'secondary' : 'ghost'}
@@ -818,7 +894,25 @@ function MessageArea({
       </ScrollArea>
 
       {/* Input Bar */}
-      <div className="p-3 border-t border-border bg-card">
+      <div className="p-3 border-t border-border bg-card relative">
+        {showQuickReplyMenu && (
+          <div className="absolute bottom-full left-3 right-3 mb-1 bg-popover border border-border rounded-lg shadow-lg max-h-56 overflow-y-auto z-10">
+            {filteredQuickReplies.map((qr, i) => (
+              <button
+                key={qr.id}
+                type="button"
+                className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm ${i === quickReplyIndex ? 'bg-accent' : 'hover:bg-accent/50'}`}
+                onMouseEnter={() => setQuickReplyIndex(i)}
+                onClick={() => handleSelectQuickReply(qr)}
+              >
+                <Badge variant="secondary" className="shrink-0">/{qr.shortcut}</Badge>
+                <span className="text-muted-foreground truncate">
+                  {qr.type === 'text' ? qr.content : `${qr.type === 'image' ? '📷' : qr.type === 'video' ? '🎥' : qr.type === 'audio' ? '🎤' : '📄'} ${qr.content || qr.type}`}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
         {sending && (
           <div className="flex items-center gap-2 mb-2 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -873,10 +967,11 @@ function MessageArea({
               <Mic className="h-5 w-5" />
             </Button>
             <Input
+              ref={textInputRef}
               value={text}
               onChange={(e) => setText(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Digite uma mensagem..."
+              placeholder="Digite uma mensagem... (use / para mensagens rápidas)"
               className="flex-1"
               disabled={sendMessage.isPending || sending}
             />
@@ -917,6 +1012,7 @@ function MessageArea({
           chatId={chatId}
         />
       )}
+      <QuickReplyManagerDialog open={quickReplyManagerOpen} onOpenChange={setQuickReplyManagerOpen} />
       </div>{/* end chat column */}
 
       {/* ── AI Sales Panel ── */}
