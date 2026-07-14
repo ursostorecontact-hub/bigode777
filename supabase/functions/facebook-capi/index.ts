@@ -44,7 +44,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { pixel_id, access_token } = await req.json();
+    const { pixel_id, access_token, client_id } = await req.json();
     if (!pixel_id || !access_token) {
       return new Response(
         JSON.stringify({ error: "pixel_id e access_token são obrigatórios" }),
@@ -62,9 +62,11 @@ Deno.serve(async (req) => {
 
     const tenantId = membership?.tenant_id;
 
-    // Get clients
+    // Get clients (um único, se client_id foi informado — usado no envio automático
+    // no momento da compra; senão, todos os clientes do tenant)
     let query = supabase.from("clients").select("*");
-    if (tenantId) query = query.eq("tenant_id", tenantId);
+    if (client_id) query = query.eq("id", client_id);
+    else if (tenantId) query = query.eq("tenant_id", tenantId);
     const { data: clients, error: clientsError } = await query;
 
     if (clientsError) {

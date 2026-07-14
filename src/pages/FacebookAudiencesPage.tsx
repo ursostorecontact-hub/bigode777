@@ -44,7 +44,7 @@ function WordCloud({ words }: { words: { text: string; count: number }[] }) {
         <span
           key={word.text}
           className={`${getSize(word.count)} ${colors[i % colors.length]} transition-transform hover:scale-110 cursor-default`}
-          title={`${word.text}: ${word.count} compra(s)`}
+          title={`${word.text}: ${word.count} cliente(s)`}
         >
           {word.text}
         </span>
@@ -73,21 +73,17 @@ export default function FacebookAudiencesPage() {
     }
   }, [settings, settingsInit]);
 
-  // Generate word cloud from client names
+  // Generate word cloud from real client sources (WhatsApp, Facebook, Indicação, etc)
   const wordCloudData = useMemo(() => {
     if (!clients?.length) return [];
-    const nameWords: Record<string, number> = {};
-    clients.forEach(c => {
-      const words = c.name.split(/\s+/).filter(w => w.length > 2);
-      words.forEach(w => {
-        const normalized = w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
-        nameWords[normalized] = (nameWords[normalized] || 0) + 1;
-      });
+    const sourceCounts: Record<string, number> = {};
+    clients.forEach((c: any) => {
+      const src = (c.source || 'Origem desconhecida').trim();
+      sourceCounts[src] = (sourceCounts[src] || 0) + 1;
     });
-    return Object.entries(nameWords)
+    return Object.entries(sourceCounts)
       .map(([text, count]) => ({ text, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 40);
+      .sort((a, b) => b.count - a.count);
   }, [clients]);
 
   const handleSaveCredentials = () => {
@@ -162,10 +158,10 @@ export default function FacebookAudiencesPage() {
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
             <Users className="h-4 w-4" />
-            Nuvem de Compradores
+            Nuvem de Origem dos Compradores
           </CardTitle>
           <CardDescription>
-            Visualização dos seus clientes reais — quanto maior o nome, mais frequente
+            De onde vêm seus clientes reais — quanto maior a origem, mais compradores vieram dali
           </CardDescription>
         </CardHeader>
         <CardContent>

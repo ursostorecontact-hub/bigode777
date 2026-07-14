@@ -10,9 +10,9 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Plus, Search, Filter, Download, MessageCircle, Pencil, Trash2, Loader2, ArrowRightLeft, Users, Tag, Settings2 } from 'lucide-react';
+import { Plus, Search, Filter, Download, MessageCircle, Pencil, Trash2, Loader2, ArrowRightLeft, Users, Tag, Settings2, ShoppingBag } from 'lucide-react';
 import { formatCurrency, formatDate, type LeadStatus, PIPELINE_STAGES, LEAD_SOURCES } from '@/types/crm';
-import { useLeads, useCreateLead, useUpdateLead, useDeleteLead, useProfiles } from '@/hooks/use-leads';
+import { useLeads, useCreateLead, useUpdateLead, useDeleteLead, useProfiles, useMarkLeadAsPurchased } from '@/hooks/use-leads';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -36,11 +36,14 @@ export default function LeadsPage() {
   const createLead = useCreateLead();
   const updateLead = useUpdateLead();
   const deleteLead = useDeleteLead();
+  const markAsPurchased = useMarkLeadAsPurchased();
   const queryClient = useQueryClient();
   const { data: labels } = useLabels();
   const { data: leadAssignments } = useLabelAssignments('lead');
   const assignLabel = useAssignLabel();
   const unassignLabel = useUnassignLabel();
+  const [purchaseTarget, setPurchaseTarget] = useState<any | null>(null);
+  const [purchaseValue, setPurchaseValue] = useState('');
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -465,6 +468,15 @@ export default function LeadsPage() {
                               </a>
                             </Button>
                           )}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-success hover:text-success"
+                            title="Marcar como Comprou"
+                            onClick={() => { setPurchaseTarget(lead); setPurchaseValue(String(lead.value || '')); }}
+                          >
+                            <ShoppingBag className="h-4 w-4" />
+                          </Button>
                           <Button variant="ghost" size="icon" className="h-8 w-8" title="Editar" onClick={() => openEdit(lead)}>
                             <Pencil className="h-4 w-4" />
                           </Button>
@@ -508,6 +520,51 @@ export default function LeadsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={!!purchaseTarget} onOpenChange={(open) => { if (!open) setPurchaseTarget(null); }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ShoppingBag className="h-4 w-4 text-success" />
+              Marcar como Comprou
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <p className="text-sm text-muted-foreground">
+              {purchaseTarget?.name} vai virar um cliente (comprador). O valor informado é enviado
+              automaticamente para o Facebook, se as credenciais estiverem configuradas em Audiências Facebook.
+            </p>
+            <div className="space-y-2">
+              <Label>Valor da compra (R$)</Label>
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                value={purchaseValue}
+                onChange={(e) => setPurchaseValue(e.target.value)}
+                placeholder="0,00"
+                autoFocus
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setPurchaseTarget(null)}>Cancelar</Button>
+            <Button
+              className="bg-success text-success-foreground hover:bg-success/90"
+              disabled={markAsPurchased.isPending || !purchaseValue}
+              onClick={() => {
+                markAsPurchased.mutate(
+                  { lead: purchaseTarget, value: parseFloat(purchaseValue) || 0 },
+                  { onSuccess: () => setPurchaseTarget(null) }
+                );
+              }}
+            >
+              {markAsPurchased.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Confirmar Compra
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
       <LabelManagerDialog open={showLabelManager} onOpenChange={setShowLabelManager} />
     </div>
   );

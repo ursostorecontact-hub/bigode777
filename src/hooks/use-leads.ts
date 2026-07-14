@@ -55,6 +55,67 @@ export function useUpdateUserRole() {
   });
 }
 
+export function useMarkLeadAsPurchased() {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async ({ lead, value, notes }: { lead: any; value: number; notes?: string }) => {
+      // 1) Cria o registro de cliente (comprador), copiando a origem do lead
+      const { data: client, error: clientError } = await supabase
+        .from('clients')
+        .insert({
+          lead_id: lead.id,
+          name: lead.name,
+          phone: lead.phone || null,
+          email: lead.email || null,
+          source: lead.source || null,
+          total_revenue: value,
+          notes: notes || null,
+        })
+        .select()
+        .single();
+      if (clientError) throw clientError;
+
+      // 2) Marca o lead como ganho
+      await supabase.from('leads').update({ status: 'ganho', pipeline_stage: 'Ganho' }).eq('id', lead.id);
+
+      // 3) Dispara a automação de conversão (se houver alguma configurada)
+      triggerAutomation('lead_converted', { ...lead, status: 'ganho' });
+
+      // 4) Envia automaticamente esse comprador para o Facebook Conversions API,
+      // se as credenciais estiverem configuradas — sem travar a tela esperando.
+      (async () => {
+        try {
+          const { data: settings } = await supabase.from('settings').select('facebook_pixel_id, facebook_access_token').maybeSingle();
+          const pixelId = (settings as any)?.facebook_pixel_id;
+          const accessToken = (settings as any)?.facebook_access_token;
+          if (pixelId && accessToken) {
+            const { data: sessionData } = await supabase.auth.getSession();
+            const token = sessionData.session?.access_token;
+            await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/facebook-capi`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+              body: JSON.stringify({ pixel_id: pixelId, access_token: accessToken, client_id: client.id }),
+            });
+          }
+        } catch (err) {
+          console.error('Erro ao enviar comprador ao Facebook automaticamente:', err);
+        }
+      })();
+
+      return client;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['leads'] });
+      qc.invalidateQueries({ queryKey: ['clients'] });
+      toast({ title: 'Compra registrada!', description: 'Cliente criado e enviado ao Facebook automaticamente (se configurado).' });
+    },
+    onError: (err: any) => {
+      toast({ title: 'Erro ao registrar compra', description: err.message, variant: 'destructive' });
+    },
+  });
+}
+
 export function useProfilesWithRoles() {
   const { user } = useAuth();
   return useQuery({
