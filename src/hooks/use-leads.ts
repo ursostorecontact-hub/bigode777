@@ -37,6 +37,24 @@ export function useProfiles() {
   });
 }
 
+export function useUpdateMaxLeads() {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async ({ userId, maxLeads }: { userId: string; maxLeads: number }) => {
+      const { error } = await supabase.from('profiles').update({ max_active_leads: maxLeads }).eq('id', userId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['profiles'] });
+      toast({ title: 'Limite atualizado!' });
+    },
+    onError: (err: any) => {
+      toast({ title: 'Erro ao atualizar limite', description: err.message, variant: 'destructive' });
+    },
+  });
+}
+
 export function useUpdateUserRole() {
   const qc = useQueryClient();
   const { toast } = useToast();

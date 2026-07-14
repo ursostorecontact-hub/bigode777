@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
 import { Users, ArrowRight, AlertTriangle, Loader2, Shuffle, BarChart3, Percent } from 'lucide-react';
-import { useLeads, useProfiles, useUpdateLead } from '@/hooks/use-leads';
+import { useLeads, useProfiles, useUpdateLead, useUpdateMaxLeads } from '@/hooks/use-leads';
 import { useWhatsAppInstances, useWhatsAppAssignments } from '@/hooks/use-integrations';
 import { formatCurrency } from '@/types/crm';
 import { useToast } from '@/hooks/use-toast';
@@ -16,6 +16,7 @@ export default function DistributionPage() {
   const { data: leads, isLoading } = useLeads();
   const { data: profiles } = useProfiles();
   const updateLead = useUpdateLead();
+  const updateMaxLeads = useUpdateMaxLeads();
   const { toast } = useToast();
   const [assignments, setAssignments] = useState<Record<string, string>>({});
   const [mode, setMode] = useState<DistributionMode>('manual');
@@ -64,6 +65,7 @@ export default function DistributionPage() {
       closed: closedThisMonth.length,
       conversionRate,
       avatar: initials,
+      maxLeads: (p as any).max_active_leads ?? 20,
     };
   });
 
@@ -210,7 +212,7 @@ export default function DistributionPage() {
       {/* Salesperson cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {salespeople.map((sp) => (
-          <Card key={sp.id} className={`transition-all hover:shadow-md ${sp.leads > 20 ? 'border-destructive/30' : ''}`}>
+          <Card key={sp.id} className={`transition-all hover:shadow-md ${sp.leads > sp.maxLeads ? 'border-destructive/30' : ''}`}>
             <CardContent className="p-4">
               <div className="flex items-center gap-3 mb-3">
                 <Avatar className="h-10 w-10">
@@ -218,7 +220,7 @@ export default function DistributionPage() {
                 </Avatar>
                 <div>
                   <p className="font-medium text-sm text-foreground">{sp.name}</p>
-                  {sp.leads > 20 && (
+                  {sp.leads > sp.maxLeads && (
                     <span className="text-[10px] text-destructive flex items-center gap-0.5">
                       <AlertTriangle className="h-3 w-3" />Sobrecarregado
                     </span>
@@ -238,6 +240,21 @@ export default function DistributionPage() {
                   <p className="text-lg font-bold text-primary">{sp.conversionRate}%</p>
                   <p className="text-[10px] text-muted-foreground">Conversão</p>
                 </div>
+              </div>
+
+              {/* Limite de leads ativos (editável) */}
+              <div className="flex items-center justify-between mt-2 pt-2 border-t border-border">
+                <span className="text-[10px] text-muted-foreground">Limite antes de "sobrecarregado"</span>
+                <input
+                  type="number"
+                  min={1}
+                  defaultValue={sp.maxLeads}
+                  className="w-14 h-6 text-xs text-center rounded border border-border bg-background"
+                  onBlur={(e) => {
+                    const val = parseInt(e.target.value) || 20;
+                    if (val !== sp.maxLeads) updateMaxLeads.mutate({ userId: sp.id, maxLeads: val });
+                  }}
+                />
               </div>
 
               {/* WhatsApp info */}
