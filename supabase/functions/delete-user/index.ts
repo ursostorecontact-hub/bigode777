@@ -94,32 +94,6 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Prevent deleting the last admin of a tenant
-    const { data: targetRoleRow } = await adminClient
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", user_id)
-      .single();
-
-    if (targetRoleRow?.role === "admin") {
-      const { data: tenantProfiles } = await adminClient
-        .from("profiles")
-        .select("id")
-        .eq("tenant_id", targetProfile.tenant_id);
-
-      const tenantUserIds = (tenantProfiles || []).map((p) => p.id);
-
-      const { count: adminCount } = await adminClient
-        .from("user_roles")
-        .select("*", { count: "exact", head: true })
-        .in("user_id", tenantUserIds)
-        .eq("role", "admin");
-
-      if ((adminCount || 0) <= 1) {
-        return json({ error: "Não é possível remover o último administrador do tenant" }, 400);
-      }
-    }
-
     // Delete: profile and role first, then auth user
     await adminClient.from("user_roles").delete().eq("user_id", user_id);
     await adminClient.from("profiles").delete().eq("id", user_id);
