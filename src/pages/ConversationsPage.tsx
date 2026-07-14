@@ -452,6 +452,8 @@ function MessageArea({
   aiPanelOpen: boolean;
 }) {
   const { data: messages, isLoading } = useWhatsAppMessages(chatId);
+  const { role } = useAuth();
+  const isAdminOrManager = role === 'admin' || role === 'manager';
   const sendMessage = useSendWhatsAppMessage();
   const markRead = useMarkChatRead();
   const deleteMessage = useDeleteWhatsAppMessage();
@@ -1035,16 +1037,20 @@ function MessageArea({
           <AlertDialogHeader>
             <AlertDialogTitle>Apagar mensagem</AlertDialogTitle>
             <AlertDialogDescription>
-              Escolha como deseja apagar esta mensagem.
+              {isAdminOrManager
+                ? 'Escolha como deseja apagar esta mensagem.'
+                : 'A mensagem será apagada do WhatsApp do cliente. O registro continua visível para administradores e gerentes no CRM.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="flex-col gap-2 sm:flex-col sm:space-x-0">
-            <AlertDialogAction
-              onClick={() => confirmDeleteMessage(false)}
-              className="w-full bg-secondary text-secondary-foreground hover:bg-secondary/80"
-            >
-              Apagar só no CRM (mantém no WhatsApp do cliente)
-            </AlertDialogAction>
+            {isAdminOrManager && (
+              <AlertDialogAction
+                onClick={() => confirmDeleteMessage(false)}
+                className="w-full bg-secondary text-secondary-foreground hover:bg-secondary/80"
+              >
+                Apagar só no CRM (mantém no WhatsApp do cliente)
+              </AlertDialogAction>
+            )}
             <AlertDialogAction
               onClick={() => confirmDeleteMessage(true)}
               className="w-full bg-destructive text-destructive-foreground hover:bg-destructive/90"

@@ -306,6 +306,16 @@ Deno.serve(async (req) => {
         });
       }
 
+      // Apagar permanentemente do CRM (some até para admins) é restrito a admin/gerente.
+      // Vendedores só podem apagar para o cliente não ver — o registro continua
+      // visível no CRM para auditoria.
+      if (!delete_for_everyone && !isAdminOrManager) {
+        return new Response(JSON.stringify({ error: "Apenas administradores e gerentes podem apagar mensagens permanentemente do CRM" }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
       // Try to delete on WhatsApp via Evolution API if it's our message
       // (só quando o usuário escolheu apagar também para o cliente)
       if (delete_for_everyone && msg.from_me && msg.evolution_message_id) {
