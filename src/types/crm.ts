@@ -103,7 +103,7 @@ export const PIPELINE_STAGES: { key: LeadStatus; label: string; color: string }[
   { key: 'perdido', label: 'Perdido', color: 'hsl(0, 84%, 60%)' },
 ];
 
-export const LEAD_SOURCES = ['Instagram', 'WhatsApp', 'Website', 'Indicação', 'Outro'];
+export const LEAD_SOURCES = ['Instagram', 'Facebook Ads', 'WhatsApp', 'Website', 'Indicação', 'Outro'];
 
 export function formatCurrency(value: number): string {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);

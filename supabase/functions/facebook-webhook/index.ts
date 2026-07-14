@@ -7,13 +7,14 @@ const corsHeaders = {
 
 // Fetch actual lead field_data from Facebook Graph API
 // The webhook payload only contains leadgen_id — the real data requires an API call.
+// "platform" tells us if the lead came from Instagram ("ig") or Facebook ("fb").
 async function fetchLeadFromGraph(
   leadgenId: string,
   accessToken: string,
-): Promise<{ name: string; email: string | null; phone: string | null } | null> {
+): Promise<{ name: string; email: string | null; phone: string | null; platform: string | null } | null> {
   try {
     const res = await fetch(
-      `https://graph.facebook.com/v21.0/${leadgenId}?fields=field_data&access_token=${accessToken}`,
+      `https://graph.facebook.com/v21.0/${leadgenId}?fields=field_data,platform&access_token=${accessToken}`,
       { signal: AbortSignal.timeout(10000) },
     );
     if (!res.ok) {
@@ -42,11 +43,22 @@ async function fetchLeadFromGraph(
       name: fullName || "Lead Facebook",
       email: getField(["email"]),
       phone: getField(["phone_number", "phone"]),
+      platform: data.platform || null,
     };
   } catch (err) {
     console.error("fetchLeadFromGraph error:", err);
     return null;
   }
+}
+
+// Converte o valor bruto da Meta ("ig", "fb", "instagram", "facebook") num rótulo legível
+function platformToSource(platform: string | null): string {
+  if (!platform) return "Facebook Ads";
+  const p = platform.toLowerCase();
+  if (p.includes("ig") || p.includes("instagram")) return "Instagram";
+  if (p.includes("fb") || p.includes("facebook")) return "Facebook Ads";
+  if (p.includes("messenger")) return "Messenger";
+  return "Facebook Ads";
 }
 
 Deno.serve(async (req) => {
@@ -125,7 +137,7 @@ Deno.serve(async (req) => {
             // Try each tenant's access token to fetch lead field data.
             // In a single-tenant setup (most common) there will be only one.
             // In multi-tenant setups we try all until one succeeds.
-            let parsedLead: { name: string; email: string | null; phone: string | null } | null = null;
+            let parsedLead: { name: string; email: string | null; phone: string | null; platform: string | null } | null = null;
             let leadTenantId: string | null = null;
 
             for (const [tenantId, accessToken] of tenantTokenMap.entries()) {
@@ -142,12 +154,13 @@ Deno.serve(async (req) => {
             const leadName = parsedLead?.name || "Lead Facebook";
             const leadEmail = parsedLead?.email || null;
             const leadPhone = parsedLead?.phone || null;
+            const leadSource = platformToSource(parsedLead?.platform ?? null);
 
             const newLead: Record<string, any> = {
               name: leadName,
               email: leadEmail,
               phone: leadPhone,
-              source: "Facebook",
+              source: leadSource,
               notes: `Facebook Lead ID: ${leadgenId}`,
               status: "novo",
               pipeline_stage: "novo",
