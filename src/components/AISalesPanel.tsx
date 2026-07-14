@@ -64,7 +64,20 @@ export function AISalesPanel({ chatId, contactName, messages, onApplySuggestion,
           contactName,
         },
       });
-      if (error) throw error;
+      if (error) {
+        // A Supabase SDK esconde a mensagem real de erro atrás de um texto genérico
+        // ("non-2xx status code"). Aqui pegamos o corpo real da resposta pra mostrar
+        // o motivo verdadeiro (ex: "IA desativada", "Limite atingido", etc).
+        let realMessage = error.message;
+        try {
+          const ctx = (error as any).context;
+          if (ctx && typeof ctx.json === 'function') {
+            const body = await ctx.json();
+            if (body?.error) realMessage = body.error;
+          }
+        } catch { /* mantém a mensagem genérica se não der pra ler o corpo */ }
+        throw new Error(realMessage);
+      }
       const result = data as SalesResponse;
       setAiResult(result);
       setSuggestion(result.suggestedResponse);
