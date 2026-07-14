@@ -16,7 +16,7 @@ import { Building2, Users, Link, Key, Loader2, UserPlus, Trash2, Smartphone, Key
 import { Textarea } from '@/components/ui/textarea';
 import { WhatsAppSettingsSection } from '@/components/WhatsAppSettingsSection';
 import { Switch } from '@/components/ui/switch';
-import { useSettings, useUpdateSettings, useProfilesWithRoles } from '@/hooks/use-leads';
+import { useSettings, useUpdateSettings, useProfilesWithRoles, useUpdateUserRole } from '@/hooks/use-leads';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -229,6 +229,7 @@ function AiSettingsSection() {
 export default function SettingsPage() {
   const { data: settings, isLoading: settingsLoading } = useSettings();
   const { data: users, isLoading: usersLoading, refetch: refetchUsers } = useProfilesWithRoles();
+  const updateUserRole = useUpdateUserRole();
   const updateSettings = useUpdateSettings();
   const { toast } = useToast();
   const { user, role } = useAuth();
@@ -446,7 +447,24 @@ export default function SettingsPage() {
                   <p className="text-xs text-muted-foreground">{member.email}</p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <Badge variant="secondary" className="capitalize text-xs">{roleLabels[member.role] || member.role}</Badge>
+                  {role === 'admin' && user?.id !== member.id ? (
+                    <Select
+                      value={member.role}
+                      onValueChange={(newRole) => updateUserRole.mutate({ userId: member.id, role: newRole })}
+                      disabled={updateUserRole.isPending}
+                    >
+                      <SelectTrigger className="h-7 w-[110px] text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="salesperson">Vendedor</SelectItem>
+                        <SelectItem value="manager">Gerente</SelectItem>
+                        <SelectItem value="admin">Admin</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Badge variant="secondary" className="capitalize text-xs">{roleLabels[member.role] || member.role}</Badge>
+                  )}
                   <div className="flex items-center gap-2">
                     {user?.id !== member.id ? (
                       <>

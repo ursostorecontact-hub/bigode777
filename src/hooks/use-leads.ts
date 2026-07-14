@@ -37,6 +37,24 @@ export function useProfiles() {
   });
 }
 
+export function useUpdateUserRole() {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async ({ userId, role }: { userId: string; role: string }) => {
+      const { error } = await supabase.from('user_roles').update({ role }).eq('user_id', userId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['profiles-with-roles'] });
+      toast({ title: 'Cargo atualizado com sucesso!' });
+    },
+    onError: (err: any) => {
+      toast({ title: 'Erro ao atualizar cargo', description: err.message, variant: 'destructive' });
+    },
+  });
+}
+
 export function useProfilesWithRoles() {
   const { user } = useAuth();
   return useQuery({
