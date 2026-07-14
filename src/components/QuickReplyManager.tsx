@@ -10,13 +10,14 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
-import { Zap, Plus, Trash2, Loader2, Type, Image as ImageIcon, Video, Mic, FileText } from 'lucide-react';
+import { Zap, Plus, Trash2, Loader2, Type, Image as ImageIcon, Video, Mic, FileText, MicOff, Send, Paperclip } from 'lucide-react';
 import {
   useQuickReplies, useCreateQuickReply, useDeleteQuickReply, uploadQuickReplyMedia,
   type QuickReplyType,
 } from '@/hooks/use-quick-replies';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { useAudioRecorder } from '@/hooks/useAudioRecorder';
 
 const TYPE_ICON: Record<QuickReplyType, React.ReactNode> = {
   text: <Type className="h-3.5 w-3.5" />,
@@ -52,12 +53,36 @@ export function QuickReplyManagerDialog({
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const audio = useAudioRecorder();
+  const [recordedPreviewUrl, setRecordedPreviewUrl] = useState<string | null>(null);
+
+  const handleRecordToggle = async () => {
+    if (audio.recording) {
+      try {
+        const blob = await audio.stop();
+        const recordedFile = new File([blob], `mensagem-rapida-${Date.now()}.webm`, { type: blob.type || 'audio/webm' });
+        setFile(recordedFile);
+        setRecordedPreviewUrl(URL.createObjectURL(recordedFile));
+      } catch (err: any) {
+        toast({ title: 'Erro ao gravar', description: err.message, variant: 'destructive' });
+      }
+    } else {
+      try {
+        setFile(null);
+        setRecordedPreviewUrl(null);
+        await audio.start();
+      } catch (err: any) {
+        toast({ title: 'Microfone', description: err.message, variant: 'destructive' });
+      }
+    }
+  };
 
   const resetForm = () => {
     setShortcut('');
     setType('text');
     setContent('');
     setFile(null);
+    setRecordedPreviewUrl(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -142,7 +167,7 @@ export function QuickReplyManagerDialog({
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Tipo</Label>
-                <Select value={type} onValueChange={(v) => { setType(v as QuickReplyType); setFile(null); if (fileInputRef.current) fileInputRef.current.value = ''; }}>
+                <Select value={type} onValueChange={(v) => { setType(v as QuickReplyType); setFile(null); setRecordedPreviewUrl(null); if (fileInputRef.current) fileInputRef.current.value = ''; }}>
                   <SelectTrigger className="h-9">
                     <SelectValue />
                   </SelectTrigger>
@@ -165,6 +190,66 @@ export function QuickReplyManagerDialog({
                   onChange={(e) => setContent(e.target.value)}
                   placeholder="Digite a mensagem que será enviada..."
                   rows={3}
+                />
+              </div>
+            ) : type === 'audio' ? (
+              <div className="space-y-1.5">
+                <Label className="text-xs">Áudio</Label>
+                {audio.recording ? (
+                  <div className="flex items-center gap-2 p-2 rounded-md border bg-background">
+                    <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={audio.cancel} title="Cancelar">
+                      <MicOff className="h-4 w-4" />
+                    </Button>
+                    <div className="flex-1 flex items-center gap-2">
+                      <div className="h-2 w-2 rounded-full bg-destructive animate-pulse" />
+                      <span className="text-sm text-destructive font-medium">Gravando...</span>
+                    </div>
+                    <Button type="button" onClick={handleRecordToggle} size="icon" className="h-8 w-8">
+                      <Send className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="flex-1 justify-center gap-1.5"
+                      onClick={handleRecordToggle}
+                    >
+                      <Mic className="h-4 w-4" />
+                      Gravar agora
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="flex-1 justify-center gap-1.5"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      <Paperclip className="h-4 w-4" />
+                      Escolher arquivo
+                    </Button>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept={ACCEPT_BY_TYPE.audio}
+                      className="hidden"
+                      onChange={(e) => { setFile(e.target.files?.[0] ?? null); setRecordedPreviewUrl(null); }}
+                    />
+                  </div>
+                )}
+                {file && recordedPreviewUrl && (
+                  <audio controls src={recordedPreviewUrl} className="w-full h-9" />
+                )}
+                {file && !recordedPreviewUrl && (
+                  <p className="text-xs text-muted-foreground truncate">📎 {file.name}</p>
+                )}
+                <Input
+                  value={content}
+                  onChange={(e) => setContent(e.target.value)}
+                  placeholder="Legenda (opcional)"
+                  className="h-9"
                 />
               </div>
             ) : (
