@@ -5,154 +5,127 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Tools available for admin users
+// Tools available for admin users (formato nativo da Anthropic: name/description/input_schema)
 const adminTools = [
   {
-    type: "function",
-    function: {
-      name: "create_lead",
-      description: "Criar um novo lead no CRM",
-      parameters: {
-        type: "object",
-        properties: {
-          name: { type: "string", description: "Nome do lead" },
-          phone: { type: "string", description: "Telefone do lead" },
-          email: { type: "string", description: "Email do lead" },
-          source: { type: "string", description: "Origem do lead (ex: WhatsApp, Facebook, Indicação)" },
-          value: { type: "number", description: "Valor estimado do lead em reais" },
-          notes: { type: "string", description: "Observações sobre o lead" },
-        },
-        required: ["name"],
+    name: "create_lead",
+    description: "Criar um novo lead no CRM",
+    input_schema: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "Nome do lead" },
+        phone: { type: "string", description: "Telefone do lead" },
+        email: { type: "string", description: "Email do lead" },
+        source: { type: "string", description: "Origem do lead (ex: WhatsApp, Facebook, Indicação)" },
+        value: { type: "number", description: "Valor estimado do lead em reais" },
+        notes: { type: "string", description: "Observações sobre o lead" },
       },
+      required: ["name"],
     },
   },
   {
-    type: "function",
-    function: {
-      name: "update_lead",
-      description: "Atualizar dados de um lead existente (status, etapa do pipeline, valor, etc)",
-      parameters: {
-        type: "object",
-        properties: {
-          lead_id: { type: "string", description: "ID do lead a atualizar" },
-          name: { type: "string" },
-          phone: { type: "string" },
-          email: { type: "string" },
-          status: { type: "string", enum: ["novo", "em_atendimento", "qualificado", "convertido", "perdido"] },
-          pipeline_stage: { type: "string" },
-          value: { type: "number" },
-          priority: { type: "string", enum: ["baixa", "media", "alta"] },
-          notes: { type: "string" },
-          assigned_to: { type: "string", description: "UUID do vendedor" },
-        },
-        required: ["lead_id"],
+    name: "update_lead",
+    description: "Atualizar dados de um lead existente (status, etapa do pipeline, valor, etc)",
+    input_schema: {
+      type: "object",
+      properties: {
+        lead_id: { type: "string", description: "ID do lead a atualizar" },
+        name: { type: "string" },
+        phone: { type: "string" },
+        email: { type: "string" },
+        status: { type: "string", enum: ["novo", "em_atendimento", "qualificado", "convertido", "perdido"] },
+        pipeline_stage: { type: "string" },
+        value: { type: "number" },
+        priority: { type: "string", enum: ["baixa", "media", "alta"] },
+        notes: { type: "string" },
+        assigned_to: { type: "string", description: "UUID do vendedor" },
       },
+      required: ["lead_id"],
     },
   },
   {
-    type: "function",
-    function: {
-      name: "delete_lead",
-      description: "Excluir um lead do CRM",
-      parameters: {
-        type: "object",
-        properties: {
-          lead_id: { type: "string", description: "ID do lead a excluir" },
-        },
-        required: ["lead_id"],
+    name: "delete_lead",
+    description: "Excluir um lead do CRM",
+    input_schema: {
+      type: "object",
+      properties: {
+        lead_id: { type: "string", description: "ID do lead a excluir" },
       },
+      required: ["lead_id"],
     },
   },
   {
-    type: "function",
-    function: {
-      name: "create_task",
-      description: "Criar uma nova tarefa",
-      parameters: {
-        type: "object",
-        properties: {
-          title: { type: "string", description: "Título da tarefa" },
-          description: { type: "string", description: "Descrição da tarefa" },
-          due_date: { type: "string", description: "Data de vencimento (YYYY-MM-DD)" },
-          priority: { type: "string", enum: ["baixa", "media", "alta"] },
-          assigned_to: { type: "string", description: "UUID do responsável (se omitido, atribui ao admin)" },
-        },
-        required: ["title", "due_date"],
+    name: "create_task",
+    description: "Criar uma nova tarefa",
+    input_schema: {
+      type: "object",
+      properties: {
+        title: { type: "string", description: "Título da tarefa" },
+        description: { type: "string", description: "Descrição da tarefa" },
+        due_date: { type: "string", description: "Data de vencimento (YYYY-MM-DD)" },
+        priority: { type: "string", enum: ["baixa", "media", "alta"] },
+        assigned_to: { type: "string", description: "UUID do responsável (se omitido, atribui ao admin)" },
       },
+      required: ["title", "due_date"],
     },
   },
   {
-    type: "function",
-    function: {
-      name: "update_task",
-      description: "Atualizar uma tarefa existente",
-      parameters: {
-        type: "object",
-        properties: {
-          task_id: { type: "string", description: "ID da tarefa" },
-          title: { type: "string" },
-          status: { type: "string", enum: ["pendente", "em_progresso", "concluida", "cancelada"] },
-          priority: { type: "string", enum: ["baixa", "media", "alta"] },
-          due_date: { type: "string" },
-          assigned_to: { type: "string" },
-        },
-        required: ["task_id"],
+    name: "update_task",
+    description: "Atualizar uma tarefa existente",
+    input_schema: {
+      type: "object",
+      properties: {
+        task_id: { type: "string", description: "ID da tarefa" },
+        title: { type: "string" },
+        status: { type: "string", enum: ["pendente", "em_progresso", "concluida", "cancelada"] },
+        priority: { type: "string", enum: ["baixa", "media", "alta"] },
+        due_date: { type: "string" },
+        assigned_to: { type: "string" },
       },
+      required: ["task_id"],
     },
   },
   {
-    type: "function",
-    function: {
-      name: "send_whatsapp",
-      description: "Enviar uma mensagem WhatsApp para um contato",
-      parameters: {
-        type: "object",
-        properties: {
-          phone: { type: "string", description: "Número de telefone com DDI (ex: 5511999999999)" },
-          message: { type: "string", description: "Texto da mensagem" },
-        },
-        required: ["phone", "message"],
+    name: "send_whatsapp",
+    description: "Enviar uma mensagem WhatsApp para um contato",
+    input_schema: {
+      type: "object",
+      properties: {
+        phone: { type: "string", description: "Número de telefone com DDI (ex: 5511999999999)" },
+        message: { type: "string", description: "Texto da mensagem" },
       },
+      required: ["phone", "message"],
     },
   },
   {
-    type: "function",
-    function: {
-      name: "create_client",
-      description: "Converter/criar um cliente",
-      parameters: {
-        type: "object",
-        properties: {
-          name: { type: "string" },
-          phone: { type: "string" },
-          email: { type: "string" },
-          notes: { type: "string" },
-          lead_id: { type: "string", description: "ID do lead de origem (opcional)" },
-        },
-        required: ["name"],
+    name: "create_client",
+    description: "Converter/criar um cliente",
+    input_schema: {
+      type: "object",
+      properties: {
+        name: { type: "string" },
+        phone: { type: "string" },
+        email: { type: "string" },
+        notes: { type: "string" },
+        lead_id: { type: "string", description: "ID do lead de origem (opcional)" },
       },
+      required: ["name"],
     },
   },
   {
-    type: "function",
-    function: {
-      name: "list_team",
-      description: "Listar todos os membros da equipe com seus IDs, nomes e cargos",
-      parameters: { type: "object", properties: {} },
-    },
+    name: "list_team",
+    description: "Listar todos os membros da equipe com seus IDs, nomes e cargos",
+    input_schema: { type: "object", properties: {} },
   },
   {
-    type: "function",
-    function: {
-      name: "search_leads",
-      description: "Buscar leads por nome ou telefone",
-      parameters: {
-        type: "object",
-        properties: {
-          query: { type: "string", description: "Texto para buscar no nome ou telefone" },
-        },
-        required: ["query"],
+    name: "search_leads",
+    description: "Buscar leads por nome ou telefone",
+    input_schema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Texto para buscar no nome ou telefone" },
       },
+      required: ["query"],
     },
   },
 ];
@@ -325,9 +298,9 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
 
-    if (!LOVABLE_API_KEY) {
+    if (!ANTHROPIC_API_KEY) {
       return new Response(JSON.stringify({ error: "AI not configured" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -428,27 +401,32 @@ REGRAS:
 - Quando der sugestões, seja específico com nomes e dados reais
 - Se não souber algo, diga honestamente`;
 
-    // Build AI request - include tools only for admins
-    const aiBody: any = {
-      model: "google/gemini-3-flash-preview",
-      messages: [
-        { role: "system", content: systemPrompt },
-        ...messages,
-      ],
+    const ANTHROPIC_MODEL = "claude-sonnet-4-6";
+    const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
+    const anthropicHeaders = {
+      "Content-Type": "application/json",
+      "x-api-key": ANTHROPIC_API_KEY,
+      "anthropic-version": "2023-06-01",
     };
 
+    // Anthropic messages: só role user/assistant, sem "system" na lista (vai em campo separado)
+    const anthropicMessages = messages.map((m: any) => ({ role: m.role, content: m.content }));
+
+    const aiBody: any = {
+      model: ANTHROPIC_MODEL,
+      max_tokens: 1536,
+      system: systemPrompt,
+      messages: anthropicMessages,
+    };
     if (isAdmin) {
       aiBody.tools = adminTools;
     }
 
-    // First AI call (may include tool calls)
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    // Primeira chamada (sem streaming) só pra checar se a IA quer usar ferramentas
+    const response = await fetch(ANTHROPIC_URL, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ ...aiBody, stream: false }),
+      headers: anthropicHeaders,
+      body: JSON.stringify(aiBody),
     });
 
     if (!response.ok) {
@@ -458,14 +436,8 @@ REGRAS:
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      if (response.status === 402) {
-        return new Response(JSON.stringify({ error: "Créditos de IA esgotados." }), {
-          status: 402,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
       const t = await response.text();
-      console.error("AI gateway error:", response.status, t);
+      console.error("Anthropic API error:", response.status, t);
       return new Response(JSON.stringify({ error: "Erro na IA" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -473,82 +445,101 @@ REGRAS:
     }
 
     const aiResult = await response.json();
-    const assistantMessage = aiResult.choices?.[0]?.message;
+    const contentBlocks: any[] = aiResult.content || [];
+    const toolUseBlocks = contentBlocks.filter((b) => b.type === "tool_use");
 
-    // Check if the AI wants to call tools
-    if (assistantMessage?.tool_calls?.length > 0) {
-      // Execute all tool calls
-      const toolResults: Array<{ role: string; tool_call_id: string; content: string }> = [];
+    // Transforma o SSE nativo da Anthropic em SSE no formato OpenAI (data: {choices:[{delta:{content}}]})
+    // pra não precisar mexer no frontend, que já sabe ler esse formato.
+    function toOpenAIStream(anthropicStream: ReadableStream<Uint8Array>): ReadableStream<Uint8Array> {
+      const reader = anthropicStream.getReader();
+      const decoder = new TextDecoder();
+      const encoder = new TextEncoder();
+      let buffer = "";
+      return new ReadableStream({
+        async pull(controller) {
+          const { done, value } = await reader.read();
+          if (done) {
+            controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+            controller.close();
+            return;
+          }
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
+          for (const line of lines) {
+            if (!line.startsWith("data: ")) continue;
+            const jsonStr = line.slice(6).trim();
+            if (!jsonStr) continue;
+            try {
+              const evt = JSON.parse(jsonStr);
+              if (evt.type === "content_block_delta" && evt.delta?.type === "text_delta") {
+                const chunk = { choices: [{ delta: { content: evt.delta.text } }] };
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`));
+              }
+            } catch { /* linha incompleta, ignora */ }
+          }
+        },
+      });
+    }
 
-      for (const tc of assistantMessage.tool_calls) {
-        const fnName = tc.function.name;
-        let fnArgs: Record<string, any> = {};
-        try {
-          fnArgs = JSON.parse(tc.function.arguments);
-        } catch { /* empty args */ }
-
-        const result = await executeToolCall(adminClient, user.id, tenantId, fnName, fnArgs);
-        toolResults.push({
-          role: "tool",
-          tool_call_id: tc.id,
+    if (toolUseBlocks.length > 0) {
+      // Executa as ferramentas que a IA pediu
+      const toolResultBlocks: any[] = [];
+      for (const tb of toolUseBlocks) {
+        const result = await executeToolCall(adminClient, user.id, tenantId, tb.name, tb.input || {});
+        toolResultBlocks.push({
+          type: "tool_result",
+          tool_use_id: tb.id,
           content: result,
         });
       }
 
-      // Second AI call: let AI summarize what was done (streaming)
+      // Segunda chamada: pede pra IA resumir o que foi feito, já em streaming
       const followUpMessages = [
-        { role: "system", content: systemPrompt },
-        ...messages,
-        assistantMessage,
-        ...toolResults,
+        ...anthropicMessages,
+        { role: "assistant", content: contentBlocks },
+        { role: "user", content: toolResultBlocks },
       ];
 
-      const streamResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      const streamResp = await fetch(ANTHROPIC_URL, {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
+        headers: anthropicHeaders,
         body: JSON.stringify({
-          model: "google/gemini-3-flash-preview",
+          model: ANTHROPIC_MODEL,
+          max_tokens: 1536,
+          system: systemPrompt,
           messages: followUpMessages,
           stream: true,
         }),
       });
 
-      if (!streamResp.ok) {
-        // Fallback: return tool results directly
-        const summary = toolResults.map(r => r.content).join("\n");
+      if (!streamResp.ok || !streamResp.body) {
+        const summary = toolResultBlocks.map((r) => r.content).join("\n");
         return new Response(JSON.stringify({ choices: [{ message: { role: "assistant", content: summary } }] }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
-      return new Response(streamResp.body, {
+      return new Response(toOpenAIStream(streamResp.body), {
         headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
       });
     }
 
-    // No tool calls - stream directly for non-tool responses
-    // Re-do as streaming request
-    const streamResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    // Sem ferramentas: refaz a chamada em modo streaming pra resposta aparecer digitando
+    const streamResp = await fetch(ANTHROPIC_URL, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
+      headers: anthropicHeaders,
       body: JSON.stringify({ ...aiBody, stream: true }),
     });
 
-    if (!streamResp.ok) {
-      // Fallback to non-streamed result
-      const content = assistantMessage?.content || "Sem resposta";
+    if (!streamResp.ok || !streamResp.body) {
+      const content = contentBlocks.find((b) => b.type === "text")?.text || "Sem resposta";
       return new Response(JSON.stringify({ choices: [{ message: { role: "assistant", content } }] }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    return new Response(streamResp.body, {
+    return new Response(toOpenAIStream(streamResp.body), {
       headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
     });
   } catch (err: any) {

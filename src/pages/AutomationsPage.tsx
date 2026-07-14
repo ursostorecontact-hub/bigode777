@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -8,9 +8,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, Plus, Trash2, Zap, Webhook, MessageSquare, Phone } from 'lucide-react';
+import { Loader2, Plus, Trash2, Zap, Webhook, MessageSquare, Phone, Mic, MicOff, Paperclip, Image as ImageIcon, Video, FileText } from 'lucide-react';
 import { useAutomations, useCreateAutomation, useUpdateAutomation, useDeleteAutomation } from '@/hooks/use-automations';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
+import { uploadQuickReplyMedia } from '@/hooks/use-quick-replies';
+import { useAudioRecorder } from '@/hooks/useAudioRecorder';
 
 const triggerLabels: Record<string, string> = {
   lead_created: 'Novo lead criado',
@@ -39,6 +42,7 @@ export default function AutomationsPage() {
   const updateAutomation = useUpdateAutomation();
   const deleteAutomation = useDeleteAutomation();
   const { toast } = useToast();
+  const { user } = useAuth();
 
   const [showNew, setShowNew] = useState(false);
   const [name, setName] = useState('');
@@ -50,6 +54,49 @@ export default function AutomationsPage() {
   // Config fields
   const [twilioFrom, setTwilioFrom] = useState('');
 
+  // Mídia anexada (áudio, foto, vídeo, documento) para automações de WhatsApp
+  const [mediaType, setMediaType] = useState<'none' | 'audio' | 'image' | 'video' | 'document'>('none');
+  const [mediaFile, setMediaFile] = useState<File | null>(null);
+  const [recordedPreviewUrl, setRecordedPreviewUrl] = useState<string | null>(null);
+  const [uploadingMedia, setUploadingMedia] = useState(false);
+  const mediaFileInputRef = useRef<HTMLInputElement>(null);
+  const audio = useAudioRecorder();
+
+  const MEDIA_ACCEPT: Record<string, string> = {
+    audio: 'audio/*',
+    image: 'image/*',
+    video: 'video/*',
+    document: '.pdf,.doc,.docx,.xls,.xlsx',
+  };
+
+  const handleRecordToggle = async () => {
+    if (audio.recording) {
+      try {
+        const blob = await audio.stop();
+        const recordedFile = new File([blob], `automacao-${Date.now()}.webm`, { type: blob.type || 'audio/webm' });
+        setMediaFile(recordedFile);
+        setRecordedPreviewUrl(URL.createObjectURL(recordedFile));
+      } catch (err: any) {
+        toast({ title: 'Erro ao gravar', description: err.message, variant: 'destructive' });
+      }
+    } else {
+      try {
+        setMediaFile(null);
+        setRecordedPreviewUrl(null);
+        await audio.start();
+      } catch (err: any) {
+        toast({ title: 'Microfone', description: err.message, variant: 'destructive' });
+      }
+    }
+  };
+
+  const resetMedia = () => {
+    setMediaType('none');
+    setMediaFile(null);
+    setRecordedPreviewUrl(null);
+    if (mediaFileInputRef.current) mediaFileInputRef.current.value = '';
+  };
+
   const resetForm = () => {
     setName('');
     setTriggerType('lead_created');
@@ -57,9 +104,10 @@ export default function AutomationsPage() {
     setMessageTemplate('');
     setInactiveDays('3');
     setTwilioFrom('');
+    resetMedia();
   };
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     if (!name) {
       toast({ title: 'Informe o nome da automação', variant: 'destructive' });
       return;
@@ -74,6 +122,30 @@ export default function AutomationsPage() {
       config.twilio_from = twilioFrom;
     }
 
+    let media_type: string | null = null;
+    let media_url: string | null = null;
+    let media_mimetype: string | null = null;
+
+    if (actionType === 'whatsapp' && mediaType !== 'none') {
+      if (!mediaFile) {
+        toast({ title: 'Selecione ou grave a mídia', description: 'Escolha um arquivo ou grave o áudio antes de salvar', variant: 'destructive' });
+        return;
+      }
+      if (!user) return;
+      setUploadingMedia(true);
+      try {
+        const uploaded = await uploadQuickReplyMedia(mediaFile, user.id);
+        media_type = mediaType;
+        media_url = uploaded.url;
+        media_mimetype = mediaType === 'audio' ? 'audio/ogg' : uploaded.mimetype;
+      } catch (err: any) {
+        toast({ title: 'Erro ao enviar mídia', description: err.message, variant: 'destructive' });
+        setUploadingMedia(false);
+        return;
+      }
+      setUploadingMedia(false);
+    }
+
     createAutomation.mutate({
       name,
       trigger_type: triggerType,
@@ -81,6 +153,9 @@ export default function AutomationsPage() {
       config,
       message_template: messageTemplate || null,
       inactive_days: triggerType === 'lead_inactive' ? parseInt(inactiveDays) || 3 : null,
+      media_type,
+      media_url,
+      media_mimetype,
     }, {
       onSuccess: () => {
         setShowNew(false);
@@ -139,6 +214,11 @@ export default function AutomationsPage() {
                       <Badge variant="secondary" className="text-xs">{actionLabels[auto.action_type]}</Badge>
                       {auto.trigger_type === 'lead_inactive' && (
                         <Badge variant="secondary" className="text-xs">{auto.inactive_days} dias</Badge>
+                      )}
+                      {auto.media_type && (
+                        <Badge variant="outline" className="text-xs">
+                          {auto.media_type === 'audio' ? '🎤 Áudio' : auto.media_type === 'image' ? '📷 Foto' : auto.media_type === 'video' ? '🎥 Vídeo' : '📄 Documento'}
+                        </Badge>
                       )}
                     </div>
                     {auto.message_template && (
@@ -218,6 +298,79 @@ export default function AutomationsPage() {
               </div>
             )}
 
+            {actionType === 'whatsapp' && (
+              <div className="space-y-2">
+                <Label>Anexar mídia (opcional)</Label>
+                <Select value={mediaType} onValueChange={(v) => { setMediaType(v as any); setMediaFile(null); setRecordedPreviewUrl(null); if (mediaFileInputRef.current) mediaFileInputRef.current.value = ''; }}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Nenhuma (só texto)</SelectItem>
+                    <SelectItem value="audio">🎤 Áudio</SelectItem>
+                    <SelectItem value="image">📷 Foto</SelectItem>
+                    <SelectItem value="video">🎥 Vídeo</SelectItem>
+                    <SelectItem value="document">📄 Documento</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                {mediaType === 'audio' && (
+                  <div className="space-y-2 pt-1">
+                    {audio.recording ? (
+                      <div className="flex items-center gap-2 p-2 rounded-md border bg-background">
+                        <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={audio.cancel} title="Cancelar">
+                          <MicOff className="h-4 w-4" />
+                        </Button>
+                        <div className="flex-1 flex items-center gap-2">
+                          <div className="h-2 w-2 rounded-full bg-destructive animate-pulse" />
+                          <span className="text-sm text-destructive font-medium">Gravando...</span>
+                        </div>
+                        <Button type="button" onClick={handleRecordToggle} size="sm">Parar</Button>
+                      </div>
+                    ) : (
+                      <div className="flex gap-2">
+                        <Button type="button" variant="outline" size="sm" className="flex-1 gap-1.5" onClick={handleRecordToggle}>
+                          <Mic className="h-4 w-4" /> Gravar agora
+                        </Button>
+                        <Button type="button" variant="outline" size="sm" className="flex-1 gap-1.5" onClick={() => mediaFileInputRef.current?.click()}>
+                          <Paperclip className="h-4 w-4" /> Escolher arquivo
+                        </Button>
+                      </div>
+                    )}
+                    {mediaFile && recordedPreviewUrl && (
+                      <audio controls src={recordedPreviewUrl} className="w-full h-9" />
+                    )}
+                    {mediaFile && !recordedPreviewUrl && (
+                      <p className="text-xs text-muted-foreground truncate">📎 {mediaFile.name}</p>
+                    )}
+                  </div>
+                )}
+
+                {mediaType !== 'none' && mediaType !== 'audio' && (
+                  <div className="space-y-2 pt-1">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="w-full justify-start gap-1.5"
+                      onClick={() => mediaFileInputRef.current?.click()}
+                    >
+                      {mediaType === 'image' ? <ImageIcon className="h-4 w-4" /> : mediaType === 'video' ? <Video className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
+                      {mediaFile ? mediaFile.name : 'Escolher arquivo...'}
+                    </Button>
+                  </div>
+                )}
+
+                {mediaType !== 'none' && (
+                  <input
+                    ref={mediaFileInputRef}
+                    type="file"
+                    accept={MEDIA_ACCEPT[mediaType]}
+                    className="hidden"
+                    onChange={(e) => { setMediaFile(e.target.files?.[0] ?? null); setRecordedPreviewUrl(null); }}
+                  />
+                )}
+              </div>
+            )}
+
             {actionType === 'sms' && (
               <div className="space-y-2">
                 <Label>Número Twilio (From) *</Label>
@@ -239,9 +392,9 @@ export default function AutomationsPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => { setShowNew(false); resetForm(); }}>Cancelar</Button>
-            <Button onClick={handleCreate} disabled={createAutomation.isPending}>
-              {createAutomation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Criar Automação
+            <Button onClick={handleCreate} disabled={createAutomation.isPending || uploadingMedia}>
+              {(createAutomation.isPending || uploadingMedia) && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {uploadingMedia ? 'Enviando mídia...' : 'Criar Automação'}
             </Button>
           </DialogFooter>
         </DialogContent>

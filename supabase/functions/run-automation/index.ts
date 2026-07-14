@@ -35,7 +35,8 @@ async function sendWhatsApp(
   config: Record<string, string>,
   lead: Record<string, any>,
   message: string,
-  tenantId: string | null
+  tenantId: string | null,
+  media?: { type: string; url: string } | null
 ) {
   let evolution_url = config.evolution_url;
   let evolution_api_key = config.evolution_api_key;
@@ -63,6 +64,33 @@ async function sendWhatsApp(
 
   const phone = (lead.phone || '').replace(/\D/g, '');
   if (!phone) throw new Error("Lead sem telefone");
+
+  // Mensagem com mídia (áudio, foto, vídeo, documento) configurada na automação
+  if (media?.url) {
+    if (media.type === "audio") {
+      const url = `${evolution_url}/message/sendWhatsAppAudio/${evolution_instance}`;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "apikey": evolution_api_key },
+        body: JSON.stringify({ number: phone, audio: media.url }),
+      });
+      if (!res.ok) throw new Error(`Evolution API error: ${await res.text()}`);
+      return;
+    }
+    const url = `${evolution_url}/message/sendMedia/${evolution_instance}`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "apikey": evolution_api_key },
+      body: JSON.stringify({
+        number: phone,
+        mediatype: media.type,
+        media: media.url,
+        caption: message || "",
+      }),
+    });
+    if (!res.ok) throw new Error(`Evolution API error: ${await res.text()}`);
+    return;
+  }
 
   const url = `${evolution_url}/message/sendText/${evolution_instance}`;
   const res = await fetch(url, {
@@ -163,7 +191,10 @@ Deno.serve(async (req) => {
             await sendWebhook(config, lead, message);
             break;
           case "whatsapp":
-            await sendWhatsApp(adminClient, config, lead, message, auto.tenant_id);
+            await sendWhatsApp(
+              adminClient, config, lead, message, auto.tenant_id,
+              auto.media_url ? { type: auto.media_type, url: auto.media_url } : null
+            );
             break;
           case "sms":
             await sendSMS(config, lead, message);

@@ -33,6 +33,9 @@ export function useCreateAutomation() {
       config: Record<string, string>;
       message_template: string | null;
       inactive_days: number | null;
+      media_type?: string | null;
+      media_url?: string | null;
+      media_mimetype?: string | null;
     }) => {
       const { data, error } = await supabase
         .from('automations')
@@ -56,7 +59,7 @@ export function useUpdateAutomation() {
   const qc = useQueryClient();
   const { toast } = useToast();
   return useMutation({
-    mutationFn: async ({ id, ...updates }: { id: string; active?: boolean; name?: string; config?: Record<string, string>; message_template?: string | null; inactive_days?: number | null }) => {
+    mutationFn: async ({ id, ...updates }: { id: string; active?: boolean; name?: string; config?: Record<string, string>; message_template?: string | null; inactive_days?: number | null; media_type?: string | null; media_url?: string | null; media_mimetype?: string | null }) => {
       const { error } = await supabase
         .from('automations')
         .update(updates)
