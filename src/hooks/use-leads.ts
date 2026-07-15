@@ -145,6 +145,22 @@ export function useMarkLeadAsPurchased() {
         }
       })();
 
+      // 5) Se o lead veio de um anúncio da Meta, avisa que ele chegou ao estágio "ganho"
+      // (Integração de leads qualificados / CRM Lead Status).
+      (async () => {
+        try {
+          const { data: sessionData } = await supabase.auth.getSession();
+          const token = sessionData.session?.access_token;
+          await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/facebook-lead-status`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ lead_id: lead.id, event_name: 'ganho' }),
+          });
+        } catch (err) {
+          console.error('Erro ao avisar a Meta sobre a compra:', err);
+        }
+      })();
+
       return client;
     },
     onSuccess: () => {
@@ -223,6 +239,24 @@ export function useUpdateLead() {
       // Trigger pipeline change automation
       if (data && data.pipeline_stage) {
         triggerAutomation('pipeline_changed', data, { new_stage: data.pipeline_stage });
+      }
+      // Avisa a Meta sobre a mudança de estágio deste lead, se ele tiver vindo
+      // de um anúncio dela (só dispara quando há mudança de etapa/status).
+      const newStage = data?.pipeline_stage || data?.status;
+      if (data?.id && newStage) {
+        (async () => {
+          try {
+            const { data: sessionData } = await supabase.auth.getSession();
+            const token = sessionData.session?.access_token;
+            await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/facebook-lead-status`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+              body: JSON.stringify({ lead_id: data.id, event_name: newStage }),
+            });
+          } catch (err) {
+            console.error('Erro ao avisar a Meta sobre mudança de estágio:', err);
+          }
+        })();
       }
     },
     onError: () => {

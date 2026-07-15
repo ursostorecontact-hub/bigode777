@@ -161,6 +161,7 @@ Deno.serve(async (req) => {
               email: leadEmail,
               phone: leadPhone,
               source: leadSource,
+              meta_lead_id: leadgenId,
               notes: `Facebook Lead ID: ${leadgenId}`,
               status: "novo",
               pipeline_stage: "novo",
