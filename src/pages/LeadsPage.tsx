@@ -444,7 +444,17 @@ export default function LeadsPage() {
                       </TableCell>
                       <TableCell>
                         <div>
-                          <p className="font-medium text-foreground">{lead.name}</p>
+                          <div className="flex items-center gap-1.5">
+                            <p className="font-medium text-foreground">{lead.name}</p>
+                            {(lead as any).ai_temperature && (
+                              <span
+                                className="text-xs shrink-0"
+                                title={(lead as any).ai_score_reason ? `${(lead as any).ai_score}/100 — ${(lead as any).ai_score_reason}` : `${(lead as any).ai_score}/100`}
+                              >
+                                {(lead as any).ai_temperature === 'quente' ? '🔥' : (lead as any).ai_temperature === 'morno' ? '🌡️' : '❄️'}
+                              </span>
+                            )}
+                          </div>
                           <p className="text-xs text-muted-foreground md:hidden">{lead.phone}</p>
                         </div>
                       </TableCell>

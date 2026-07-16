@@ -168,14 +168,24 @@ Deno.serve(async (req) => {
             };
             if (leadTenantId) newLead.tenant_id = leadTenantId;
 
-            const { error: insertError } = await adminClient
+            const { data: insertedLead, error: insertError } = await adminClient
               .from("leads")
-              .insert(newLead);
+              .insert(newLead)
+              .select("id")
+              .single();
 
             if (insertError) {
               console.error("Lead insert error:", insertError);
             } else {
               console.log(`Lead created from Facebook: ${leadName} (leadgen_id: ${leadgenId})`);
+              // Dispara a análise de IA em segundo plano (chamada interna, sem usuário logado)
+              if (insertedLead) {
+                fetch(`${supabaseUrl}/functions/v1/ai-lead-scoring`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceRoleKey}` },
+                  body: JSON.stringify({ lead_id: insertedLead.id, internal: true, tenantId: leadTenantId }),
+                }).catch((err) => console.error("Erro ao chamar ai-lead-scoring:", err));
+              }
             }
           }
         }

@@ -160,6 +160,7 @@ export function useMarkLeadAsPurchased() {
           console.error('Erro ao avisar a Meta sobre a compra:', err);
         }
       })();
+      triggerLeadScoring(lead.id);
 
       return client;
     },
@@ -194,6 +195,22 @@ export function useProfilesWithRoles() {
   });
 }
 
+// Dispara a análise de IA do lead (pontuação de interesse + aviso à Meta se
+// estiver quente). Roda em segundo plano, sem travar a tela.
+async function triggerLeadScoring(leadId: string) {
+  try {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-lead-scoring`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ lead_id: leadId }),
+    });
+  } catch (err) {
+    console.error('Erro ao analisar lead com IA:', err);
+  }
+}
+
 export function useCreateLead() {
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -215,6 +232,7 @@ export function useCreateLead() {
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ['leads'] });
       toast({ title: 'Lead criado com sucesso!' });
+      if (data?.id) triggerLeadScoring(data.id);
       // Trigger automation
       if (data) triggerAutomation('lead_created', data);
     },
@@ -257,6 +275,9 @@ export function useUpdateLead() {
             console.error('Erro ao avisar a Meta sobre mudança de estágio:', err);
           }
         })();
+        // Reanalisa o lead com IA a cada mudança de etapa/status, pra manter a
+        // pontuação de interesse sempre atualizada.
+        triggerLeadScoring(data.id);
       }
     },
     onError: () => {
