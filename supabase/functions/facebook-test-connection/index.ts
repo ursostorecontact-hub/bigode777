@@ -42,19 +42,17 @@ Deno.serve(async (req) => {
       return json({ ok: false, error: "Preencha o Pixel ID e o Access Token antes de testar" }, 400);
     }
 
-    // 1) Confere se o Pixel ID existe e se o token consegue ler ele
-    const pixelRes = await fetch(
-      `https://graph.facebook.com/v25.0/${encodeURIComponent(pixel_id)}?fields=name,id&access_token=${encodeURIComponent(access_token)}`
-    );
-    const pixelData = await pixelRes.json();
-
-    if (!pixelRes.ok) {
-      return json({
-        ok: false,
-        error: pixelData.error?.message || "Pixel ID ou Access Token inválidos",
-        details: pixelData.error,
-      });
-    }
+    // 1) Tenta ler o nome do pixel — alguns tokens (ex: gerados pelo fluxo de
+    // "Integração de Leads") não têm permissão pra isso, e tudo bem: isso não
+    // significa que o token é inválido, só que ele é focado em ENVIAR eventos.
+    let pixelName: string | null = null;
+    try {
+      const pixelRes = await fetch(
+        `https://graph.facebook.com/v25.0/${encodeURIComponent(pixel_id)}?fields=name,id&access_token=${encodeURIComponent(access_token)}`
+      );
+      const pixelData = await pixelRes.json();
+      if (pixelRes.ok) pixelName = pixelData.name;
+    } catch { /* segue sem o nome, não é bloqueante */ }
 
     // 2) Confere se o token realmente consegue ENVIAR eventos (não só ler o pixel),
     // usando o test_event_code — isso não polui os dados reais do pixel.
@@ -77,15 +75,15 @@ Deno.serve(async (req) => {
       return json({
         ok: false,
         error: testData.error?.message || "O token não tem permissão para enviar eventos",
-        pixel_name: pixelData.name,
+        pixel_name: pixelName,
         details: testData.error,
       });
     }
 
     return json({
       ok: true,
-      pixel_name: pixelData.name,
-      pixel_id: pixelData.id,
+      pixel_name: pixelName || pixel_id,
+      pixel_id,
       events_received: testData.events_received,
     });
   } catch (err: any) {
