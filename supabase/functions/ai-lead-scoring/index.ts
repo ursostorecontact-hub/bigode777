@@ -110,7 +110,12 @@ Analise o quanto esse lead está perto de comprar, baseado em sinais reais como:
 Além disso, tente descobrir de onde esse lead realmente veio, procurando pistas na conversa
 (ex: "vi seu anúncio no Instagram", "achei no Google", "fulano me indicou", "vi no Facebook").
 Só preencha "source" se encontrar uma pista real e clara — se não tiver nenhuma pista, deixe null
-(não invente, e não confunda "conversei pelo WhatsApp" com a origem real dele).`;
+(não invente, e não confunda "conversei pelo WhatsApp" com a origem real dele).
+
+Por fim, avalie se a venda PARECE TER SIDO FECHADA de verdade, com base em confirmação clara
+(ex: "beleza, fechado", "já paguei", "recebi o produto", "combinado, manda o pix"). NÃO marque como
+fechada só por interesse ou intenção — precisa ter uma confirmação real de acordo. Na dúvida, marque
+como false (é melhor o vendedor confirmar manualmente do que a IA inventar uma venda que não aconteceu).`;
 
     const aiRes = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -122,7 +127,7 @@ Só preencha "source" se encontrar uma pista real e clara — se não tiver nenh
       body: JSON.stringify({
         model: "claude-sonnet-4-6",
         max_tokens: 400,
-        system: 'Você é um analista de vendas expert em qualificação de leads. Responda APENAS com um JSON válido, sem markdown, no formato exato: {"temperature": "quente" | "morno" | "frio", "score": <0 a 100>, "reason": "<explicação curta em português, 1-2 frases>", "source": "<Instagram" | "Facebook Ads" | "Indicação" | "Google" | "Website" | null>}',
+        system: 'Você é um analista de vendas expert em qualificação de leads. Responda APENAS com um JSON válido, sem markdown, no formato exato: {"temperature": "quente" | "morno" | "frio", "score": <0 a 100>, "reason": "<explicação curta em português, 1-2 frases>", "source": "<Instagram" | "Facebook Ads" | "Indicação" | "Google" | "Website" | null>, "purchase_detected": <true ou false>, "purchase_value_hint": <número ou null>}',
         messages: [{ role: "user", content: prompt }],
       }),
     });
@@ -135,7 +140,7 @@ Só preencha "source" se encontrar uma pista real e clara — se não tiver nenh
 
     const aiData = await aiRes.json();
     const rawText = aiData.content?.find((b: any) => b.type === "text")?.text || "{}";
-    let parsed: { temperature: string; score: number; reason: string; source?: string | null };
+    let parsed: { temperature: string; score: number; reason: string; source?: string | null; purchase_detected?: boolean; purchase_value_hint?: number | null };
     try {
       const cleaned = rawText.trim().replace(/^```json\s*|\s*```$/g, "");
       parsed = JSON.parse(cleaned);
@@ -156,6 +161,13 @@ Só preencha "source" se encontrar uma pista real e clara — se não tiver nenh
     // plataforma de anúncios — não deixamos a IA "adivinhar" por cima disso).
     if (parsed.source && !lead.meta_lead_id) {
       updates.source = parsed.source;
+    }
+
+    // Só sinaliza detecção de compra se o lead ainda não foi confirmado como venda —
+    // evita ficar reavisando algo que o vendedor já confirmou manualmente.
+    if (lead.status !== "ganho") {
+      updates.ai_purchase_detected = !!parsed.purchase_detected;
+      updates.ai_purchase_value_hint = parsed.purchase_value_hint ?? null;
     }
 
     await supabase.from("leads").update(updates).eq("id", lead_id);

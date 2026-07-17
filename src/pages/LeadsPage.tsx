@@ -455,6 +455,15 @@ export default function LeadsPage() {
                               </span>
                             )}
                           </div>
+                          {(lead as any).ai_purchase_detected && lead.status !== 'ganho' && (
+                            <button
+                              onClick={() => { setPurchaseTarget(lead); setPurchaseValue(String((lead as any).ai_purchase_value_hint || lead.value || '')); }}
+                              className="mt-0.5 flex items-center gap-1 text-[10px] font-medium text-success bg-success/10 rounded px-1.5 py-0.5 hover:bg-success/20 transition-colors"
+                              title="A IA detectou uma possível venda fechada nessa conversa. Clique pra confirmar."
+                            >
+                              💰 IA detectou venda — confirmar?
+                            </button>
+                          )}
                           <p className="text-xs text-muted-foreground md:hidden">{lead.phone}</p>
                         </div>
                       </TableCell>
