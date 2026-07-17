@@ -66,6 +66,32 @@ export default function FacebookAudiencesPage() {
   const [accessToken, setAccessToken] = useState('');
   const [sending, setSending] = useState(false);
   const [settingsInit, setSettingsInit] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; error?: string; pixel_name?: string } | null>(null);
+
+  const handleTestConnection = async () => {
+    if (!pixelId || !accessToken) {
+      toast({ title: 'Preencha o Pixel ID e o Access Token primeiro', variant: 'destructive' });
+      return;
+    }
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/facebook-test-connection`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ pixel_id: pixelId, access_token: accessToken }),
+      });
+      const result = await res.json();
+      setTestResult(result);
+    } catch (err: any) {
+      setTestResult({ ok: false, error: err.message });
+    } finally {
+      setTesting(false);
+    }
+  };
 
   // Initialize fields from settings
   React.useEffect(() => {
@@ -369,10 +395,34 @@ export default function FacebookAudiencesPage() {
               </a>
             </p>
           </div>
-          <Button size="sm" onClick={handleSaveCredentials} disabled={updateSettings.isPending}>
-            {updateSettings.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
-            Salvar Credenciais
-          </Button>
+          <div className="flex gap-2">
+            <Button size="sm" onClick={handleSaveCredentials} disabled={updateSettings.isPending}>
+              {updateSettings.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+              Salvar Credenciais
+            </Button>
+            <Button size="sm" variant="outline" onClick={handleTestConnection} disabled={testing}>
+              {testing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Target className="h-4 w-4 mr-2" />}
+              Testar Conexão
+            </Button>
+          </div>
+          {testResult && (
+            <div className={`rounded-lg p-3 text-sm flex items-start gap-2 ${testResult.ok ? 'bg-success/10 text-success' : 'bg-destructive/10 text-destructive'}`}>
+              {testResult.ok ? <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" /> : <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />}
+              <div>
+                {testResult.ok ? (
+                  <>
+                    <p className="font-medium">Conectado com sucesso! ✅</p>
+                    <p className="text-xs opacity-80">Pixel: {testResult.pixel_name} — o token tem permissão pra enviar eventos.</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="font-medium">Não conectou ❌</p>
+                    <p className="text-xs opacity-80">{testResult.error}</p>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
