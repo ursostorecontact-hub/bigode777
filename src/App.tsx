@@ -11,6 +11,7 @@ import LoginPage from "@/pages/LoginPage";
 import RegisterPage from "@/pages/RegisterPage";
 import DashboardPage from "@/pages/DashboardPage";
 import LeadsPage from "@/pages/LeadsPage";
+import LeadQueuePage from "@/pages/LeadQueuePage";
 import PipelinePage from "@/pages/PipelinePage";
 import ClientsPage from "@/pages/ClientsPage";
 import TasksPage from "@/pages/TasksPage";
@@ -78,6 +79,7 @@ function AppRoutes() {
       {/* Protected routes */}
       <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
       <Route path="/leads" element={<ProtectedRoute><LeadsPage /></ProtectedRoute>} />
+      <Route path="/fila-de-leads" element={<ProtectedRoute><LeadQueuePage /></ProtectedRoute>} />
       <Route path="/conversas" element={<ProtectedRoute><ConversationsPage /></ProtectedRoute>} />
       <Route path="/tarefas" element={<ProtectedRoute><TasksPage /></ProtectedRoute>} />
       <Route path="/pipeline" element={<ProtectedRoute roles={['admin', 'manager']}><PipelinePage /></ProtectedRoute>} />

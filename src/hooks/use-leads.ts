@@ -10,6 +10,63 @@ type LeadUpdatePayload = { id: string } & TablesUpdate<'leads'>;
 type TaskUpdatePayload = { id: string } & TablesUpdate<'tasks'>;
 type SettingsUpdatePayload = { id: string } & TablesUpdate<'settings'>;
 
+// Fila de leads não atribuídos, visível pra todos os vendedores. Atualiza sozinha
+// a cada 5s, pra a "pesca" parecer ao vivo (ver lead sumir quando outro pega).
+export function useLeadQueue() {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ['lead-queue'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('leads')
+        .select('*')
+        .is('assigned_to', null)
+        .not('status', 'in', '(ganho,perdido)')
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user,
+    refetchInterval: 5000,
+  });
+}
+
+// "Pescar" um lead: só funciona se ninguém tiver pego ainda (checa e trava no
+// próprio banco, então dois vendedores clicando ao mesmo tempo nunca pegam o mesmo lead).
+export function useClaimLead() {
+  const qc = useQueryClient();
+  const { user } = useAuth();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async (leadId: string) => {
+      const { data, error } = await supabase
+        .from('leads')
+        .update({ assigned_to: user!.id, status: 'contactado', pipeline_stage: 'contactado' })
+        .eq('id', leadId)
+        .is('assigned_to', null) // só atualiza se ainda estiver livre
+        .select();
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error('ALREADY_CLAIMED');
+      }
+      return data[0];
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['lead-queue'] });
+      qc.invalidateQueries({ queryKey: ['leads'] });
+      toast({ title: '🎣 Lead pescado com sucesso!', description: 'Ele já está atribuído a você.' });
+    },
+    onError: (err: any) => {
+      if (err.message === 'ALREADY_CLAIMED') {
+        toast({ title: 'Que pena!', description: 'Outro vendedor já pegou esse lead primeiro.', variant: 'destructive' });
+      } else {
+        toast({ title: 'Erro ao pescar lead', description: err.message, variant: 'destructive' });
+      }
+      qc.invalidateQueries({ queryKey: ['lead-queue'] });
+    },
+  });
+}
+
 export function useLeads() {
   const { user } = useAuth();
   return useQuery({

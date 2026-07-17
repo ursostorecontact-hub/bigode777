@@ -34,6 +34,7 @@ import {
   ShieldCheck,
   Target,
   ShoppingBag,
+  Fish,
 } from 'lucide-react';
 import flashLogo from '@/assets/flash-logo.png';
 import { Button } from '@/components/ui/button';
@@ -42,6 +43,7 @@ const mainNav = [
   { title: 'Dashboard', url: '/dashboard', icon: LayoutDashboard },
   { title: 'Conversas', url: '/conversas', icon: MessageSquare },
   { title: 'Leads', url: '/leads', icon: Users },
+  { title: 'Fila de Leads', url: '/fila-de-leads', icon: Fish },
   { title: 'Tarefas', url: '/tarefas', icon: CheckSquare },
   { title: 'Pipeline', url: '/pipeline', icon: Kanban, roles: ['admin', 'manager'] },
   { title: 'Catálogo', url: '/catalogo', icon: ShoppingBag },
