@@ -187,7 +187,7 @@ Só preencha "source" se encontrar uma pista real e clara — se não tiver nenh
           let qStatus: "success" | "error" = "success";
           let qError: string | null = null;
           try {
-            const fbRes = await fetch(`https://graph.facebook.com/v21.0/${settings.facebook_pixel_id}/events`, {
+            const fbRes = await fetch(`https://graph.facebook.com/v25.0/${settings.facebook_pixel_id}/events`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ ...qualifiedPayload, access_token: settings.facebook_access_token }),

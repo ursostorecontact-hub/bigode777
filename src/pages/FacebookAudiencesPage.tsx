@@ -148,8 +148,8 @@ export default function FacebookAudiencesPage() {
     if (!settings) return;
     updateSettings.mutate({
       id: settings.id,
-      facebook_pixel_id: pixelId,
-      facebook_access_token: accessToken,
+      facebook_pixel_id: pixelId.trim(),
+      facebook_access_token: accessToken.trim().replace(/[\r\n]/g, ''),
     } as any);
   };
 

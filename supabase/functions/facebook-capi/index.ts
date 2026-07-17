@@ -62,7 +62,7 @@ Deno.serve(async (req) => {
       let status: "success" | "error" = "success";
       let errorMessage: string | null = null;
       try {
-        const fbRes = await fetch(`https://graph.facebook.com/v21.0/${pixel_id}/events`, {
+        const fbRes = await fetch(`https://graph.facebook.com/v25.0/${pixel_id}/events`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ ...logRow.payload, access_token }),
@@ -172,7 +172,7 @@ Deno.serve(async (req) => {
       let errorMessage: string | null = null;
 
       try {
-        const fbRes = await fetch(`https://graph.facebook.com/v21.0/${pixel_id}/events`, {
+        const fbRes = await fetch(`https://graph.facebook.com/v25.0/${pixel_id}/events`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),

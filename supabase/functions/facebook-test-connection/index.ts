@@ -35,14 +35,16 @@ Deno.serve(async (req) => {
     );
     if (authError || !user) return json({ ok: false, error: "Não autorizado" }, 401);
 
-    const { pixel_id, access_token } = await req.json();
+    const body = await req.json();
+    const pixel_id = (body.pixel_id || "").toString().trim();
+    const access_token = (body.access_token || "").toString().trim().replace(/[\r\n]/g, "");
     if (!pixel_id || !access_token) {
       return json({ ok: false, error: "Preencha o Pixel ID e o Access Token antes de testar" }, 400);
     }
 
     // 1) Confere se o Pixel ID existe e se o token consegue ler ele
     const pixelRes = await fetch(
-      `https://graph.facebook.com/v21.0/${pixel_id}?fields=name,id&access_token=${access_token}`
+      `https://graph.facebook.com/v25.0/${encodeURIComponent(pixel_id)}?fields=name,id&access_token=${encodeURIComponent(access_token)}`
     );
     const pixelData = await pixelRes.json();
 
@@ -56,7 +58,7 @@ Deno.serve(async (req) => {
 
     // 2) Confere se o token realmente consegue ENVIAR eventos (não só ler o pixel),
     // usando o test_event_code — isso não polui os dados reais do pixel.
-    const testRes = await fetch(`https://graph.facebook.com/v21.0/${pixel_id}/events`, {
+    const testRes = await fetch(`https://graph.facebook.com/v25.0/${pixel_id}/events`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

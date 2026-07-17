@@ -14,7 +14,7 @@ async function fetchLeadFromGraph(
 ): Promise<{ name: string; email: string | null; phone: string | null; platform: string | null } | null> {
   try {
     const res = await fetch(
-      `https://graph.facebook.com/v21.0/${leadgenId}?fields=field_data,platform&access_token=${accessToken}`,
+      `https://graph.facebook.com/v25.0/${leadgenId}?fields=field_data,platform&access_token=${accessToken}`,
       { signal: AbortSignal.timeout(10000) },
     );
     if (!res.ok) {
