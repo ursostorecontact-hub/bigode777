@@ -275,10 +275,10 @@ export function useUpdateLead() {
             console.error('Erro ao avisar a Meta sobre mudança de estágio:', err);
           }
         })();
-        // Reanalisa o lead com IA a cada mudança de etapa/status, pra manter a
-        // pontuação de interesse sempre atualizada.
-        triggerLeadScoring(data.id);
       }
+      // Reanalisa o lead com IA a cada edição (não só mudança de etapa/status),
+      // já que qualquer campo (observações, valor, etc) pode mudar o quão "quente" ele está.
+      if (data?.id) triggerLeadScoring(data.id);
     },
     onError: () => {
       toast({ title: 'Erro ao atualizar lead', variant: 'destructive' });
