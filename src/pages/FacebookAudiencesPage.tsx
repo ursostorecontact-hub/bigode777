@@ -5,8 +5,8 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, Send, Users, Target, Info, CheckCircle2, Save } from 'lucide-react';
-import { useClients, useSettings, useUpdateSettings } from '@/hooks/use-leads';
+import { Loader2, Send, Users, Target, Info, CheckCircle2, Save, TrendingUp, Flame, RefreshCw, AlertCircle, DollarSign } from 'lucide-react';
+import { useClients, useSettings, useUpdateSettings, useLeads, useMetaEventsLog, useRetryMetaEvent } from '@/hooks/use-leads';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -57,6 +57,9 @@ export default function FacebookAudiencesPage() {
   const { data: clients, isLoading: clientsLoading } = useClients();
   const { data: settings, isLoading: settingsLoading } = useSettings();
   const updateSettings = useUpdateSettings();
+  const { data: leads } = useLeads();
+  const { data: eventsLog, isLoading: eventsLoading } = useMetaEventsLog();
+  const retryEvent = useRetryMetaEvent();
   const { toast } = useToast();
 
   const [pixelId, setPixelId] = useState('');
@@ -85,6 +88,35 @@ export default function FacebookAudiencesPage() {
       .map(([text, count]) => ({ text, count }))
       .sort((a, b) => b.count - a.count);
   }, [clients]);
+
+  // Funil completo por origem: quantos leads entraram × quantos viraram cliente × R$ gerado
+  const funnelBySource = useMemo(() => {
+    if (!leads) return [];
+    const bySource: Record<string, { totalLeads: number; converted: number; revenue: number }> = {};
+    leads.forEach((l: any) => {
+      const src = (l.source || 'Origem desconhecida').trim();
+      if (!bySource[src]) bySource[src] = { totalLeads: 0, converted: 0, revenue: 0 };
+      bySource[src].totalLeads++;
+      if (l.status === 'ganho') {
+        bySource[src].converted++;
+        bySource[src].revenue += Number(l.value) || 0;
+      }
+    });
+    return Object.entries(bySource)
+      .map(([source, d]) => ({
+        source,
+        ...d,
+        conversionRate: d.totalLeads > 0 ? Math.round((d.converted / d.totalLeads) * 100) : 0,
+      }))
+      .sort((a, b) => b.revenue - a.revenue);
+  }, [leads]);
+
+  const hotLeads = useMemo(() => {
+    if (!leads) return [];
+    return leads
+      .filter((l: any) => l.ai_temperature === 'quente' && l.status !== 'ganho' && l.status !== 'perdido')
+      .sort((a: any, b: any) => (b.ai_score || 0) - (a.ai_score || 0));
+  }, [leads]);
 
   const handleSaveCredentials = () => {
     if (!settings) return;
@@ -169,6 +201,131 @@ export default function FacebookAudiencesPage() {
           <div className="text-center mt-2">
             <Badge variant="secondary">{clients?.length || 0} clientes cadastrados</Badge>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Funil completo por origem */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <TrendingUp className="h-4 w-4" />
+            Funil por Origem
+          </CardTitle>
+          <CardDescription>
+            Quantos leads entraram, quantos viraram cliente, e quanto cada origem gerou em vendas
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {funnelBySource.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-6">Nenhum lead cadastrado ainda.</p>
+          ) : (
+            <div className="space-y-3">
+              {funnelBySource.map((f) => (
+                <div key={f.source} className="border border-border rounded-lg p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-medium text-sm">{f.source}</span>
+                    <span className="text-sm font-bold text-success flex items-center gap-1">
+                      <DollarSign className="h-3.5 w-3.5" />
+                      {f.revenue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                    <span>{f.totalLeads} leads</span>
+                    <span>→</span>
+                    <span>{f.converted} clientes</span>
+                    <Badge variant={f.conversionRate >= 20 ? 'default' : 'secondary'} className="text-[10px]">
+                      {f.conversionRate}% conversão
+                    </Badge>
+                  </div>
+                  <div className="h-1.5 bg-muted rounded-full mt-2 overflow-hidden">
+                    <div className="h-full bg-primary rounded-full" style={{ width: `${f.conversionRate}%` }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Leads quentes agora */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Flame className="h-4 w-4 text-destructive" />
+            Leads Quentes Agora
+          </CardTitle>
+          <CardDescription>
+            Classificados pela IA como prontos pra fechar — priorize esses no atendimento
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {hotLeads.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-6">Nenhum lead quente no momento.</p>
+          ) : (
+            <div className="space-y-2">
+              {hotLeads.map((l: any) => (
+                <div key={l.id} className="flex items-center justify-between p-2 rounded-md border bg-card">
+                  <div>
+                    <p className="text-sm font-medium">🔥 {l.name}</p>
+                    <p className="text-xs text-muted-foreground">{l.ai_score_reason}</p>
+                  </div>
+                  <Badge variant="destructive" className="shrink-0">{l.ai_score}/100</Badge>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Log de eventos enviados à Meta */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4" />
+            Histórico de Envios à Meta
+          </CardTitle>
+          <CardDescription>
+            Toda tentativa de envio (Purchase, Qualified, mudança de estágio) fica registrada aqui — falhas podem ser reenviadas
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {eventsLoading ? (
+            <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+          ) : !eventsLog?.length ? (
+            <p className="text-sm text-muted-foreground text-center py-6">Nenhum evento enviado ainda.</p>
+          ) : (
+            <div className="space-y-1.5 max-h-96 overflow-y-auto">
+              {eventsLog.map((ev: any) => (
+                <div key={ev.id} className="flex items-center gap-2 p-2 rounded-md border bg-card text-sm">
+                  {ev.status === 'success' ? (
+                    <CheckCircle2 className="h-4 w-4 text-success shrink-0" />
+                  ) : (
+                    <AlertCircle className="h-4 w-4 text-destructive shrink-0" />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="truncate">
+                      <span className="font-medium">{ev.event_name}</span>
+                      {(ev.leads?.name || ev.clients?.name) && ` — ${ev.leads?.name || ev.clients?.name}`}
+                    </p>
+                    {ev.error_message && <p className="text-xs text-destructive truncate">{ev.error_message}</p>}
+                    <p className="text-[10px] text-muted-foreground">{new Date(ev.created_at).toLocaleString('pt-BR')}</p>
+                  </div>
+                  {ev.status === 'error' && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 gap-1 shrink-0"
+                      disabled={retryEvent.isPending || !pixelId || !accessToken}
+                      onClick={() => retryEvent.mutate({ logId: ev.id, eventSource: ev.event_source, pixelId, accessToken })}
+                    >
+                      <RefreshCw className="h-3 w-3" />
+                      Reenviar
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 

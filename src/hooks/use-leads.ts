@@ -175,6 +175,48 @@ export function useMarkLeadAsPurchased() {
   });
 }
 
+export function useMetaEventsLog() {
+  return useQuery({
+    queryKey: ['meta-events-log'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('meta_events_log')
+        .select('*, leads(name), clients(name)')
+        .order('created_at', { ascending: false })
+        .limit(100);
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+export function useRetryMetaEvent() {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async ({ logId, eventSource, pixelId, accessToken }: { logId: string; eventSource: string; pixelId: string; accessToken: string }) => {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      const fn = eventSource === 'purchase' ? 'facebook-capi' : 'facebook-lead-status';
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${fn}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ retry_log_id: logId, pixel_id: pixelId, access_token: accessToken }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      return data;
+    },
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ['meta-events-log'] });
+      toast({ title: data.ok ? 'Evento reenviado com sucesso!' : 'Falhou de novo', description: data.error, variant: data.ok ? undefined : 'destructive' });
+    },
+    onError: (err: any) => {
+      toast({ title: 'Erro ao reenviar', description: err.message, variant: 'destructive' });
+    },
+  });
+}
+
 export function useProfilesWithRoles() {
   const { user } = useAuth();
   return useQuery({

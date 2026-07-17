@@ -174,19 +174,42 @@ Só preencha "source" se encontrar uma pista real e clara — se não tiver nenh
           if (lead.email) userData.em = [await sha256(lead.email)];
           if (lead.phone) userData.ph = [await sha256(lead.phone.replace(/\D/g, ""))];
 
-          await fetch(`https://graph.facebook.com/v21.0/${settings.facebook_pixel_id}/events`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              access_token: settings.facebook_access_token,
-              data: [{
-                action_source: "system_generated",
-                event_name: "Qualified",
-                event_time: Math.floor(Date.now() / 1000),
-                user_data: userData,
-                custom_data: { event_source: "crm", lead_event_source: "Flash CRMs" },
-              }],
-            }),
+          const qualifiedPayload = {
+            data: [{
+              action_source: "system_generated",
+              event_name: "Qualified",
+              event_time: Math.floor(Date.now() / 1000),
+              user_data: userData,
+              custom_data: { event_source: "crm", lead_event_source: "Flash CRMs" },
+            }],
+          };
+
+          let qStatus: "success" | "error" = "success";
+          let qError: string | null = null;
+          try {
+            const fbRes = await fetch(`https://graph.facebook.com/v21.0/${settings.facebook_pixel_id}/events`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ ...qualifiedPayload, access_token: settings.facebook_access_token }),
+            });
+            if (!fbRes.ok) {
+              const fbResult = await fbRes.json();
+              qStatus = "error";
+              qError = fbResult.error?.message || "Erro na API do Facebook";
+            }
+          } catch (err: any) {
+            qStatus = "error";
+            qError = err.message;
+          }
+
+          await supabase.from("meta_events_log").insert({
+            tenant_id: tenantId,
+            lead_id: lead.id,
+            event_name: "Qualified",
+            event_source: "qualified",
+            status: qStatus,
+            error_message: qError,
+            payload: qualifiedPayload,
           });
         }
       } catch (err) {

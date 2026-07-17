@@ -44,7 +44,53 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { pixel_id, access_token, client_id } = await req.json();
+    const { pixel_id, access_token, client_id, retry_log_id } = await req.json();
+
+    // Reenvio manual de um evento que falhou antes, usando o payload já salvo no log
+    if (retry_log_id) {
+      const { data: logRow, error: logError } = await supabase
+        .from("meta_events_log")
+        .select("*")
+        .eq("id", retry_log_id)
+        .single();
+      if (logError || !logRow) {
+        return new Response(JSON.stringify({ error: "Evento não encontrado no histórico" }), {
+          status: 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      let status: "success" | "error" = "success";
+      let errorMessage: string | null = null;
+      try {
+        const fbRes = await fetch(`https://graph.facebook.com/v21.0/${pixel_id}/events`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...logRow.payload, access_token }),
+        });
+        const fbResult = await fbRes.json();
+        if (!fbRes.ok) {
+          status = "error";
+          errorMessage = fbResult.error?.message || "Erro na API do Facebook";
+        }
+      } catch (err: any) {
+        status = "error";
+        errorMessage = err.message;
+      }
+      await supabase.from("meta_events_log").insert({
+        tenant_id: logRow.tenant_id,
+        client_id: logRow.client_id,
+        lead_id: logRow.lead_id,
+        event_name: logRow.event_name,
+        event_source: logRow.event_source,
+        status,
+        error_message: errorMessage,
+        payload: logRow.payload,
+      });
+      return new Response(JSON.stringify({ ok: status === "success", error: errorMessage }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     if (!pixel_id || !access_token) {
       return new Response(
         JSON.stringify({ error: "pixel_id e access_token são obrigatórios" }),
@@ -113,38 +159,52 @@ Deno.serve(async (req) => {
       })
     );
 
-    // Send to Facebook in batches of 1000
+    // Envia um cliente por vez (não em lote), pra conseguir registrar e reenviar
+    // individualmente cada evento que falhar.
     let totalSent = 0;
-    for (let i = 0; i < events.length; i += 1000) {
-      const batch = events.slice(i, i + 1000);
-      const fbRes = await fetch(
-        `https://graph.facebook.com/v21.0/${pixel_id}/events`,
-        {
+    let totalFailed = 0;
+    for (let i = 0; i < clients.length; i++) {
+      const client = clients[i];
+      const event = events[i];
+      const payload = { data: [event], access_token };
+
+      let logStatus: "success" | "error" = "success";
+      let errorMessage: string | null = null;
+
+      try {
+        const fbRes = await fetch(`https://graph.facebook.com/v21.0/${pixel_id}/events`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            data: batch,
-            access_token,
-          }),
+          body: JSON.stringify(payload),
+        });
+        const fbResult = await fbRes.json();
+        if (!fbRes.ok) {
+          logStatus = "error";
+          errorMessage = fbResult.error?.message || "Erro na API do Facebook";
+        } else {
+          totalSent++;
         }
-      );
-
-      const fbResult = await fbRes.json();
-      if (!fbRes.ok) {
-        return new Response(
-          JSON.stringify({
-            error: fbResult.error?.message || "Erro na API do Facebook",
-            fb_error: fbResult.error,
-            sent_count: totalSent,
-          }),
-          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+      } catch (err: any) {
+        logStatus = "error";
+        errorMessage = err.message;
       }
-      totalSent += batch.length;
+
+      if (logStatus === "error") totalFailed++;
+
+      await supabase.from("meta_events_log").insert({
+        tenant_id: tenantId,
+        client_id: client.id,
+        lead_id: client.lead_id || null,
+        event_name: "Purchase",
+        event_source: "purchase",
+        status: logStatus,
+        error_message: errorMessage,
+        payload,
+      });
     }
 
     return new Response(
-      JSON.stringify({ ok: true, sent_count: totalSent }),
+      JSON.stringify({ ok: true, sent_count: totalSent, failed_count: totalFailed }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err: any) {
