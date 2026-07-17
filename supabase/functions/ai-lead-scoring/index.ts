@@ -115,7 +115,15 @@ Só preencha "source" se encontrar uma pista real e clara — se não tiver nenh
 Por fim, avalie se a venda PARECE TER SIDO FECHADA de verdade, com base em confirmação clara
 (ex: "beleza, fechado", "já paguei", "recebi o produto", "combinado, manda o pix"). NÃO marque como
 fechada só por interesse ou intenção — precisa ter uma confirmação real de acordo. Na dúvida, marque
-como false (é melhor o vendedor confirmar manualmente do que a IA inventar uma venda que não aconteceu).`;
+como false (é melhor o vendedor confirmar manualmente do que a IA inventar uma venda que não aconteceu).
+
+Também sugira em qual etapa do funil esse lead deveria estar agora, com base em como a conversa
+está indo: "contactado" (já trocou mensagem, mas ainda sem interesse claro em comprar), "negociando"
+(perguntando sobre preço/condições/produto, mostrando interesse real), "proposta_enviada" (você já
+mandou um valor/condição específica de fechamento pra ele), ou "perdido" (ele disse claramente que
+não quer mais, foi grosseiro, ou sumiu depois de recusar). NÃO sugira "ganho" aqui — isso é decidido
+separadamente pelo campo purchase_detected. Se não tiver certeza de qual etapa, repita a etapa atual
+informada nos dados do lead.`;
 
     const aiRes = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -127,7 +135,7 @@ como false (é melhor o vendedor confirmar manualmente do que a IA inventar uma 
       body: JSON.stringify({
         model: "claude-sonnet-4-6",
         max_tokens: 400,
-        system: 'Você é um analista de vendas expert em qualificação de leads. Responda APENAS com um JSON válido, sem markdown, no formato exato: {"temperature": "quente" | "morno" | "frio", "score": <0 a 100>, "reason": "<explicação curta em português, 1-2 frases>", "source": "<Instagram" | "Facebook Ads" | "Indicação" | "Google" | "Website" | null>, "purchase_detected": <true ou false>, "purchase_value_hint": <número ou null>}',
+        system: 'Você é um analista de vendas expert em qualificação de leads. Responda APENAS com um JSON válido, sem markdown, no formato exato: {"temperature": "quente" | "morno" | "frio", "score": <0 a 100>, "reason": "<explicação curta em português, 1-2 frases>", "source": "<Instagram" | "Facebook Ads" | "Indicação" | "Google" | "Website" | null>, "purchase_detected": <true ou false>, "purchase_value_hint": <número ou null>, "suggested_stage": "contactado" | "negociando" | "proposta_enviada" | "perdido"}',
         messages: [{ role: "user", content: prompt }],
       }),
     });
@@ -140,7 +148,7 @@ como false (é melhor o vendedor confirmar manualmente do que a IA inventar uma 
 
     const aiData = await aiRes.json();
     const rawText = aiData.content?.find((b: any) => b.type === "text")?.text || "{}";
-    let parsed: { temperature: string; score: number; reason: string; source?: string | null; purchase_detected?: boolean; purchase_value_hint?: number | null };
+    let parsed: { temperature: string; score: number; reason: string; source?: string | null; purchase_detected?: boolean; purchase_value_hint?: number | null; suggested_stage?: string };
     try {
       const cleaned = rawText.trim().replace(/^```json\s*|\s*```$/g, "");
       parsed = JSON.parse(cleaned);
@@ -170,7 +178,51 @@ como false (é melhor o vendedor confirmar manualmente do que a IA inventar uma 
       updates.ai_purchase_value_hint = parsed.purchase_value_hint ?? null;
     }
 
+    // Avança a etapa do funil automaticamente, com travas de segurança:
+    // nunca mexe num lead já fechado ("ganho"/"perdido"), nunca marca "ganho" sozinha
+    // (isso fica só pra confirmação manual do vendedor), e nunca volta pra uma etapa
+    // anterior (só avança, pra não desfazer progresso real que o vendedor já fez).
+    const STAGE_ORDER = ["novo", "contactado", "negociando", "proposta_enviada"];
+    const currentStage = lead.pipeline_stage;
+    const currentIndex = STAGE_ORDER.indexOf(currentStage);
+    let newStage: string | null = null;
+
+    if (currentStage !== "ganho" && currentStage !== "perdido" && parsed.suggested_stage) {
+      if (parsed.suggested_stage === "perdido") {
+        newStage = "perdido";
+      } else {
+        const suggestedIndex = STAGE_ORDER.indexOf(parsed.suggested_stage);
+        if (suggestedIndex > -1 && suggestedIndex > currentIndex) {
+          newStage = parsed.suggested_stage;
+        }
+      }
+    }
+
+    if (newStage) {
+      updates.pipeline_stage = newStage;
+      updates.status = newStage;
+    }
+
     await supabase.from("leads").update(updates).eq("id", lead_id);
+
+    // Se a etapa realmente mudou, dispara o mesmo fluxo que uma mudança manual dispararia:
+    // automações configuradas pra esse gatilho, e o aviso de estágio pra Meta (se aplicável).
+    if (newStage) {
+      const updatedLead = { ...lead, ...updates };
+      fetch(`${supabaseUrl}/functions/v1/run-automation`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: authHeader },
+        body: JSON.stringify({ trigger_type: "pipeline_changed", lead: updatedLead, extra: { new_stage: newStage } }),
+      }).catch((err) => console.error("Erro ao disparar automacao de mudanca de etapa:", err));
+
+      if (lead.meta_lead_id) {
+        fetch(`${supabaseUrl}/functions/v1/facebook-lead-status`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: authHeader },
+          body: JSON.stringify({ lead_id, event_name: newStage }),
+        }).catch((err) => console.error("Erro ao avisar a Meta sobre mudanca de etapa:", err));
+      }
+    }
 
     // Lead quente + veio de anúncio da Meta → avisa a Meta pra ela buscar mais parecidos.
     if (parsed.temperature === "quente" && lead.meta_lead_id) {

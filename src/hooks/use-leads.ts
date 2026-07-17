@@ -119,7 +119,7 @@ export function useMarkLeadAsPurchased() {
 
       // 2) Marca o lead como ganho e atualiza o valor para o valor real da compra
       //    (é esse campo que o Dashboard soma para calcular a Receita Mensal)
-      await supabase.from('leads').update({ status: 'ganho', pipeline_stage: 'Ganho', value }).eq('id', lead.id);
+      await supabase.from('leads').update({ status: 'ganho', pipeline_stage: 'ganho', value }).eq('id', lead.id);
 
       // 3) Dispara a automação de conversão (se houver alguma configurada)
       triggerAutomation('lead_converted', { ...lead, status: 'ganho' });
