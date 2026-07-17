@@ -234,7 +234,7 @@ informada nos dados do lead.`;
           .maybeSingle();
 
         if (settings?.facebook_pixel_id && settings?.facebook_access_token) {
-          const userData: Record<string, unknown> = { lead_id: Number(lead.meta_lead_id) };
+          const userData: Record<string, unknown> = { lead_id: lead.meta_lead_id };
           if (lead.email) userData.em = [await sha256(lead.email)];
           if (lead.phone) userData.ph = [await sha256(lead.phone.replace(/\D/g, ""))];
 

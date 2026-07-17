@@ -95,7 +95,18 @@ Deno.serve(async (req) => {
   // ── POST: Facebook lead event ─────────────────────────────────────────────
   if (req.method === "POST") {
     try {
-      const body = await req.json();
+      // IDs da Meta (leadgen_id, ad_id, form_id, page_id) podem ter até 17 dígitos —
+      // além do limite que o JavaScript consegue representar com precisão em um
+      // Number (16 dígitos). Sem isso, o JSON.parse padrão arredondaria o valor
+      // silenciosamente, e o lead_id que mandássemos de volta pra Meta nunca mais
+      // bateria com o lead real dela. Aqui, colocamos esses campos entre aspas
+      // (como texto) antes de interpretar o JSON, preservando o valor exato.
+      const rawBody = await req.text();
+      const safeBody = rawBody.replace(
+        /"(leadgen_id|ad_id|form_id|page_id|adgroup_id)":\s*(\d+)/g,
+        '"$1":"$2"'
+      );
+      const body = JSON.parse(safeBody);
       console.log("Facebook webhook received:", JSON.stringify(body).slice(0, 500));
 
       if (body.object === "page" && body.entry) {

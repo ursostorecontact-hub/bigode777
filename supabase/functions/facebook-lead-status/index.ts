@@ -130,7 +130,7 @@ Deno.serve(async (req) => {
       return json({ ok: true, skipped: "Facebook não configurado para esta empresa" });
     }
 
-    const userData: Record<string, unknown> = { lead_id: Number(lead.meta_lead_id) };
+    const userData: Record<string, unknown> = { lead_id: lead.meta_lead_id };
     if (lead.email) userData.em = [await sha256(lead.email)];
     if (lead.phone) userData.ph = [await sha256(lead.phone.replace(/\D/g, ""))];
 
