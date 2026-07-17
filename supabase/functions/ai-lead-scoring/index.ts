@@ -105,7 +105,12 @@ Criado em: ${lead.created_at}
 Conversa de WhatsApp (mais recente por último):
 ${conversationText}
 
-Analise o quanto esse lead está perto de comprar, baseado em sinais reais como: perguntas sobre preço/prazo/forma de pagamento, urgência demonstrada, respostas rápidas, objeções resolvidas, ou o oposto (sumiu, respostas frias, só curiosidade).`;
+Analise o quanto esse lead está perto de comprar, baseado em sinais reais como: perguntas sobre preço/prazo/forma de pagamento, urgência demonstrada, respostas rápidas, objeções resolvidas, ou o oposto (sumiu, respostas frias, só curiosidade).
+
+Além disso, tente descobrir de onde esse lead realmente veio, procurando pistas na conversa
+(ex: "vi seu anúncio no Instagram", "achei no Google", "fulano me indicou", "vi no Facebook").
+Só preencha "source" se encontrar uma pista real e clara — se não tiver nenhuma pista, deixe null
+(não invente, e não confunda "conversei pelo WhatsApp" com a origem real dele).`;
 
     const aiRes = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -117,7 +122,7 @@ Analise o quanto esse lead está perto de comprar, baseado em sinais reais como:
       body: JSON.stringify({
         model: "claude-sonnet-4-6",
         max_tokens: 400,
-        system: 'Você é um analista de vendas expert em qualificação de leads. Responda APENAS com um JSON válido, sem markdown, no formato exato: {"temperature": "quente" | "morno" | "frio", "score": <0 a 100>, "reason": "<explicação curta em português, 1-2 frases>"}',
+        system: 'Você é um analista de vendas expert em qualificação de leads. Responda APENAS com um JSON válido, sem markdown, no formato exato: {"temperature": "quente" | "morno" | "frio", "score": <0 a 100>, "reason": "<explicação curta em português, 1-2 frases>", "source": "<Instagram" | "Facebook Ads" | "Indicação" | "Google" | "Website" | null>}',
         messages: [{ role: "user", content: prompt }],
       }),
     });
@@ -130,7 +135,7 @@ Analise o quanto esse lead está perto de comprar, baseado em sinais reais como:
 
     const aiData = await aiRes.json();
     const rawText = aiData.content?.find((b: any) => b.type === "text")?.text || "{}";
-    let parsed: { temperature: string; score: number; reason: string };
+    let parsed: { temperature: string; score: number; reason: string; source?: string | null };
     try {
       const cleaned = rawText.trim().replace(/^```json\s*|\s*```$/g, "");
       parsed = JSON.parse(cleaned);
@@ -139,15 +144,21 @@ Analise o quanto esse lead está perto de comprar, baseado em sinais reais como:
       return json({ error: "Resposta inválida da IA" }, 500);
     }
 
-    await supabase
-      .from("leads")
-      .update({
-        ai_score: parsed.score,
-        ai_temperature: parsed.temperature,
-        ai_score_reason: parsed.reason,
-        ai_scored_at: new Date().toISOString(),
-      })
-      .eq("id", lead_id);
+    const updates: Record<string, any> = {
+      ai_score: parsed.score,
+      ai_temperature: parsed.temperature,
+      ai_score_reason: parsed.reason,
+      ai_scored_at: new Date().toISOString(),
+    };
+
+    // Só atualiza a origem se a IA achou uma pista real E o lead não veio de um
+    // anúncio confirmado da Meta (esses já têm a origem certa, vinda direto da
+    // plataforma de anúncios — não deixamos a IA "adivinhar" por cima disso).
+    if (parsed.source && !lead.meta_lead_id) {
+      updates.source = parsed.source;
+    }
+
+    await supabase.from("leads").update(updates).eq("id", lead_id);
 
     // Lead quente + veio de anúncio da Meta → avisa a Meta pra ela buscar mais parecidos.
     if (parsed.temperature === "quente" && lead.meta_lead_id) {

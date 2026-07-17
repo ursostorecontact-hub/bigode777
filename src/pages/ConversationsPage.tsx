@@ -165,15 +165,24 @@ function SaveContactDialog({
         setSavingLead(false);
         return;
       }
-      const { error } = await supabase.from('leads').insert({
+      const { data: newLead, error } = await supabase.from('leads').insert({
         name: contactName,
         phone,
-        source: 'WhatsApp',
+        source: null, // a IA descobre a origem real lendo a conversa, em vez de fixar "WhatsApp"
         status: 'novo',
         pipeline_stage: 'novo',
-      });
+      }).select('id').single();
       if (error) throw error;
-      toast({ title: 'Lead criado!', description: `${contactName} adicionado ao pipeline.` });
+      toast({ title: 'Lead criado!', description: `${contactName} adicionado ao pipeline. A IA vai analisar a origem e o interesse dele.` });
+      if (newLead) {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData.session?.access_token;
+        fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-lead-scoring`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ lead_id: newLead.id }),
+        }).catch((err) => console.error('Erro ao analisar lead com IA:', err));
+      }
     } catch (err: any) {
       toast({ title: 'Erro ao criar lead', description: err.message, variant: 'destructive' });
     } finally {
