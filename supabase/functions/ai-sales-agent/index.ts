@@ -395,8 +395,15 @@ Deno.serve(async (req: Request) => {
     };
 
     // ── Auto-send ────────────────────────────────────────────────────────────
+    // Trava explícita e direta: só envia sozinho se o modo permitir isso agora
+    // mesmo. Não depende só dos "return" acima — mesmo que algo mude ali, essa
+    // checagem aqui é a última linha de defesa antes de mandar mensagem real.
+    const modeAllowsAutoSend =
+      settings.ai_mode === "automatic" ||
+      (settings.ai_mode === "hybrid" && !isInsideBusinessHours(settings.work_start ?? "08:00", settings.work_end ?? "18:00"));
+
     let sentAuto = false;
-    if (trigger_type === "auto" && !response.requiresHumanHandoff) {
+    if (trigger_type === "auto" && !response.requiresHumanHandoff && modeAllowsAutoSend) {
       try {
         const { data: chat } = await supabase
           .from("whatsapp_chats")
