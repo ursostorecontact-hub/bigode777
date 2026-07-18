@@ -404,7 +404,7 @@ function ChatList({
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1.5 min-w-0">
                       <span
-                        className={`h-2.5 w-2.5 rounded-full shrink-0 ${chat.unread_count > 0 ? 'bg-destructive animate-pulse' : 'bg-success'}`}
+                        className={`h-2.5 w-2.5 rounded-full shrink-0 ${chat.unread_count > 0 ? 'bg-success animate-pulse' : 'bg-destructive'}`}
                         title={chat.unread_count > 0 ? 'Não lida' : 'Já aberta'}
                       />
                       <p className={`text-sm truncate ${chat.unread_count > 0 ? 'font-bold text-foreground' : 'font-semibold text-foreground'}`}>
