@@ -309,6 +309,17 @@ async function handleMessagesUpsert(
       console.log("[webhook] foto de perfil falhou:", e);
     }
 
+    // Detecta se essa conversa é nova (primeiro contato desse número), pra saber
+    // se precisa criar um lead sem dono pra ela entrar na Fila de Leads — assim
+    // nenhuma conversa "escapa" direto pros vendedores sem passar pela pesca.
+    const { data: existingChatCheck } = await supabase
+      .from("whatsapp_chats")
+      .select("id")
+      .eq("whatsapp_instance_id", instance.id)
+      .eq("remote_jid", remoteJid)
+      .maybeSingle();
+    const isNewChat = !existingChatCheck;
+
     // Upsert do chat
     const upsertData: Record<string, unknown> = {
       whatsapp_instance_id: instance.id,
@@ -361,6 +372,37 @@ async function handleMessagesUpsert(
     }
 
     const chatId = targetChat.id as string;
+
+    // Conversa nova (primeiro contato, não é grupo, não fomos nós que mandamos):
+    // cria um lead SEM DONO pra ela cair na Fila de Leads, em vez de já aparecer
+    // liberada pra qualquer vendedor ver/responder sem passar pela pesca.
+    if (isNewChat && !isGroup && !fromMe) {
+      try {
+        const { data: newLead } = await supabase
+          .from("leads")
+          .insert({
+            name: contactName || pushName || contactPhone,
+            phone: contactPhone,
+            source: null, // a IA descobre a origem lendo a conversa
+            status: "novo",
+            pipeline_stage: "novo",
+            tenant_id: instance.tenant_id,
+            assigned_to: null,
+          })
+          .select("id")
+          .single();
+
+        if (newLead) {
+          fetch(`${supabaseUrl}/functions/v1/ai-lead-scoring`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${supabaseKey}` },
+            body: JSON.stringify({ lead_id: newLead.id, internal: true, tenantId: instance.tenant_id }),
+          }).catch((err) => console.error("[webhook] erro ao chamar ai-lead-scoring:", err));
+        }
+      } catch (err) {
+        console.error("[webhook] erro ao criar lead automatico:", err);
+      }
+    }
 
     // Fire-and-forget: preencher nome real de grupos que ainda exibem o JID como nome
     if (isGroup) {

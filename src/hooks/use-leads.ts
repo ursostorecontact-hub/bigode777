@@ -49,12 +49,27 @@ export function useClaimLead() {
       if (!data || data.length === 0) {
         throw new Error('ALREADY_CLAIMED');
       }
-      return data[0];
+      const claimedLead = data[0];
+
+      // A conversa do WhatsApp desse contato só fica visível pra quem pescou o
+      // lead (sem isso, o vendedor pescava o lead mas não conseguia ver/responder
+      // a conversa, já que ela tem sua própria trava de atribuição).
+      if (claimedLead.phone) {
+        const cleanPhone = claimedLead.phone.replace(/\D/g, '');
+        await supabase
+          .from('whatsapp_chats')
+          .update({ assigned_to: user!.id })
+          .ilike('contact_phone', `%${cleanPhone.slice(-8)}%`)
+          .is('assigned_to', null);
+      }
+
+      return claimedLead;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['lead-queue'] });
       qc.invalidateQueries({ queryKey: ['leads'] });
-      toast({ title: '🎣 Lead pescado com sucesso!', description: 'Ele já está atribuído a você.' });
+      qc.invalidateQueries({ queryKey: ['whatsapp-chats'] });
+      toast({ title: '🎣 Lead pescado com sucesso!', description: 'Ele já está atribuído a você, e a conversa de WhatsApp também.' });
     },
     onError: (err: any) => {
       if (err.message === 'ALREADY_CLAIMED') {
