@@ -177,6 +177,15 @@ async function buildClaudeMessages(msgs: DBMessage[]): Promise<ClaudeMessage[]> 
       result.push({ role, content: m.content });
     }
   }
+
+  // A API da Claude exige que a conversa sempre termine com uma mensagem do
+  // usuário (cliente) — alguns modelos não aceitam "prefill" com o turno final
+  // sendo do assistente. Se as últimas mensagens forem do vendedor (from_me),
+  // removemos elas daqui: a IA sugere com base na última fala real do cliente.
+  while (result.length > 0 && result[result.length - 1].role === "assistant") {
+    result.pop();
+  }
+
   return result;
 }
 
