@@ -35,45 +35,15 @@ export function useLeadQueue() {
 // próprio banco, então dois vendedores clicando ao mesmo tempo nunca pegam o mesmo lead).
 export function useClaimLead() {
   const qc = useQueryClient();
-  const { user } = useAuth();
   const { toast } = useToast();
   return useMutation({
     mutationFn: async (leadId: string) => {
-      const { data, error } = await supabase
-        .from('leads')
-        .update({ assigned_to: user!.id, status: 'contactado', pipeline_stage: 'contactado' })
-        .eq('id', leadId)
-        .is('assigned_to', null) // só atualiza se ainda estiver livre
-        .select();
+      const { data, error } = await supabase.rpc('claim_lead', { p_lead_id: leadId });
       if (error) throw error;
-      if (!data || data.length === 0) {
-        throw new Error('ALREADY_CLAIMED');
+      if (!data?.claimed) {
+        throw new Error(data?.error === 'already_claimed' ? 'ALREADY_CLAIMED' : (data?.error || 'unknown'));
       }
-      const claimedLead = data[0];
-
-      // A conversa do WhatsApp desse contato só fica visível pra quem pescou o
-      // lead (sem isso, o vendedor pescava o lead mas não conseguia ver/responder
-      // a conversa, já que ela tem sua própria trava de atribuição).
-      if (claimedLead.phone) {
-        const cleanPhone = claimedLead.phone.replace(/\D/g, '');
-        const { data: linkedChats, error: chatLinkError } = await supabase
-          .from('whatsapp_chats')
-          .update({ assigned_to: user!.id })
-          .ilike('contact_phone', `%${cleanPhone.slice(-8)}%`)
-          .is('assigned_to', null)
-          .select();
-        if (chatLinkError) {
-          console.error('Erro ao vincular conversa ao vendedor:', chatLinkError);
-        } else if (!linkedChats || linkedChats.length === 0) {
-          console.warn('Nenhuma conversa de WhatsApp encontrada pra vincular ao lead pescado:', claimedLead.id, {
-            lead_phone_original: claimedLead.phone,
-            lead_phone_limpo: cleanPhone,
-            ultimos_8_digitos_buscados: cleanPhone.slice(-8),
-          });
-        }
-      }
-
-      return claimedLead;
+      return data;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['lead-queue'] });
