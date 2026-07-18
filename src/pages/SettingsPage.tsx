@@ -90,12 +90,13 @@ function AiSettingsSection() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const { data: profile } = await supabase
+      const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('tenant_id')
         .eq('id', user!.id)
         .single();
 
+      if (profileError) throw new Error(`Erro ao buscar perfil: ${profileError.message}`);
       const tenantId = profile?.tenant_id;
       if (!tenantId) throw new Error('Tenant não encontrado');
 
