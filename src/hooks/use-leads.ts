@@ -65,7 +65,11 @@ export function useClaimLead() {
         if (chatLinkError) {
           console.error('Erro ao vincular conversa ao vendedor:', chatLinkError);
         } else if (!linkedChats || linkedChats.length === 0) {
-          console.warn('Nenhuma conversa de WhatsApp encontrada pra vincular ao lead pescado:', claimedLead.id);
+          console.warn('Nenhuma conversa de WhatsApp encontrada pra vincular ao lead pescado:', claimedLead.id, {
+            lead_phone_original: claimedLead.phone,
+            lead_phone_limpo: cleanPhone,
+            ultimos_8_digitos_buscados: cleanPhone.slice(-8),
+          });
         }
       }
 
