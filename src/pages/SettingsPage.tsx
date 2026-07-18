@@ -60,6 +60,7 @@ interface AiUsage {
 
 function AiSettingsSection() {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [aiEnabled, setAiEnabled] = useState(false);
   const [aiMode, setAiMode] = useState('suggestion');
   const [customPersonality, setCustomPersonality] = useState('');
