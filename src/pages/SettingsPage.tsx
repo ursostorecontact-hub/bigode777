@@ -93,6 +93,7 @@ function AiSettingsSection() {
       const { data: profile } = await supabase
         .from('profiles')
         .select('tenant_id')
+        .eq('id', user!.id)
         .single();
 
       const tenantId = profile?.tenant_id;
