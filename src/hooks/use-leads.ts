@@ -22,7 +22,7 @@ export function useLeadQueue() {
         .select('*')
         .is('assigned_to', null)
         .not('status', 'in', '(ganho,perdido)')
-        .order('created_at', { ascending: true });
+        .order('created_at', { ascending: false });
       if (error) throw error;
       return data;
     },
@@ -56,11 +56,17 @@ export function useClaimLead() {
       // a conversa, já que ela tem sua própria trava de atribuição).
       if (claimedLead.phone) {
         const cleanPhone = claimedLead.phone.replace(/\D/g, '');
-        await supabase
+        const { data: linkedChats, error: chatLinkError } = await supabase
           .from('whatsapp_chats')
           .update({ assigned_to: user!.id })
           .ilike('contact_phone', `%${cleanPhone.slice(-8)}%`)
-          .is('assigned_to', null);
+          .is('assigned_to', null)
+          .select();
+        if (chatLinkError) {
+          console.error('Erro ao vincular conversa ao vendedor:', chatLinkError);
+        } else if (!linkedChats || linkedChats.length === 0) {
+          console.warn('Nenhuma conversa de WhatsApp encontrada pra vincular ao lead pescado:', claimedLead.id);
+        }
       }
 
       return claimedLead;
