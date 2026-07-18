@@ -21,7 +21,7 @@ export function useLeadQueue() {
         .from('leads')
         .select('*')
         .is('assigned_to', null)
-        .not('status', 'in', '(ganho,perdido)')
+        .eq('status', 'novo') // só leads que ainda não tiveram nenhum atendimento
         .order('created_at', { ascending: false });
       if (error) throw error;
       return data;
