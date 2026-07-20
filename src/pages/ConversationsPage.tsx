@@ -880,7 +880,7 @@ function MessageArea({
                             className="max-w-[150px] max-h-[150px]"
                             loading="lazy"
                           />
-                        ) : msg.message_type === 'location' ? (
+                        ) : (msg.message_type === 'location' || (msg.content?.startsWith('{"lat"') ?? false)) ? (
                           (() => {
                             let loc: { lat?: number; lng?: number; name?: string | null } = {};
                             try { loc = JSON.parse(msg.content || '{}'); } catch { /* conteúdo antigo/inválido */ }
