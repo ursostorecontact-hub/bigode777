@@ -363,6 +363,14 @@ Deno.serve(async (req) => {
         return json({ error: `Erro ao salvar instância: ${saveErr.message}` }, 500);
       }
 
+      // Se não conseguiu criar no Evolution API e não tem QR code nenhum pra mostrar,
+      // isso é um erro de verdade — não faz sentido devolver "sucesso" sem nada útil.
+      if (!evolutionOk && !qrcodeBase64) {
+        return json({
+          error: evolutionWarning || "Não foi possível gerar o QR Code. Tente novamente.",
+        }, 502);
+      }
+
       return json({
         instance_id: saved.id,
         instance_name: finalInstanceName,
