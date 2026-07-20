@@ -254,6 +254,16 @@ async function handleMessagesUpsert(
         lng: lm.degreesLongitude,
         name: lm.name || null,
       });
+    } else if (message.liveLocationMessage) {
+      // Localização "em tempo real" (compartilhada por um período) — mesmo
+      // formato da localização fixa, só vem num campo diferente do WhatsApp.
+      const llm = message.liveLocationMessage as Record<string, number | string>;
+      messageType = "location";
+      content = JSON.stringify({
+        lat: llm.degreesLatitude,
+        lng: llm.degreesLongitude,
+        name: "Localização em tempo real",
+      });
     } else if (message.contactMessage || message.contactsArrayMessage) {
       const cm = (message.contactMessage || (message.contactsArrayMessage as Record<string, unknown[]>)?.contacts?.[0]) as Record<string, string> || {};
       messageType = "contact";

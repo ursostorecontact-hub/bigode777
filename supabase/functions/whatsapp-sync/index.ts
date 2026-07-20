@@ -356,6 +356,14 @@ Deno.serve(async (req) => {
               } else if (message.stickerMessage) {
                 messageType = "sticker";
                 content = "🎨 Sticker";
+              } else if (message.locationMessage) {
+                messageType = "location";
+                const lm = message.locationMessage as Record<string, number | string>;
+                content = JSON.stringify({ lat: lm.degreesLatitude, lng: lm.degreesLongitude, name: lm.name || null });
+              } else if (message.liveLocationMessage) {
+                messageType = "location";
+                const llm = message.liveLocationMessage as Record<string, number | string>;
+                content = JSON.stringify({ lat: llm.degreesLatitude, lng: llm.degreesLongitude, name: "Localização em tempo real" });
               } else {
                 content = "Mensagem não suportada";
               }
