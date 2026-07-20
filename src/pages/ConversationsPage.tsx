@@ -20,7 +20,7 @@ import { Label } from '@/components/ui/label';
 import {
   MessageSquare, Send, Loader2, Search, Phone, ArrowLeft,
   Check, CheckCheck, Clock, Mic, MicOff, UserPlus, Paperclip,
-  Image as ImageIcon, Video, FileText, X, Trash2, Tag, Settings2, Sparkles, Users, Zap,
+  Image as ImageIcon, Video, FileText, X, Trash2, Tag, Settings2, Sparkles, Users, Zap, MapPin,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { AISalesPanel } from '@/components/AISalesPanel';
@@ -880,6 +880,25 @@ function MessageArea({
                             className="max-w-[150px] max-h-[150px]"
                             loading="lazy"
                           />
+                        ) : msg.message_type === 'location' ? (
+                          (() => {
+                            let loc: { lat?: number; lng?: number; name?: string | null } = {};
+                            try { loc = JSON.parse(msg.content || '{}'); } catch { /* conteúdo antigo/inválido */ }
+                            if (loc.lat == null || loc.lng == null) {
+                              return <p className="text-sm opacity-80">📍 Localização (dados indisponíveis)</p>;
+                            }
+                            return (
+                              <a
+                                href={`https://www.google.com/maps?q=${loc.lat},${loc.lng}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-2 underline"
+                              >
+                                <MapPin className="h-4 w-4 shrink-0" />
+                                <span className="text-sm">{loc.name || 'Ver localização no mapa'}</span>
+                              </a>
+                            );
+                          })()
                         ) : (
                           <>
                             {msg.message_type !== 'text' && (

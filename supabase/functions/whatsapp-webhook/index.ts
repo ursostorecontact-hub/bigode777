@@ -320,12 +320,17 @@ async function handleMessagesUpsert(
       .maybeSingle();
     const isNewChat = !existingChatCheck;
 
+    // Prévia amigável pra lista de conversas — location salva coordenadas em JSON
+    // no "content" da mensagem em si (necessário pro mapa funcionar), mas ninguém
+    // deveria ver esse JSON cru como texto de prévia.
+    const previewText = messageType === "location" ? "📍 Localização" : content;
+
     // Upsert do chat
     const upsertData: Record<string, unknown> = {
       whatsapp_instance_id: instance.id,
       remote_jid: remoteJid,
       contact_phone: contactPhone,
-      last_message: content,
+      last_message: previewText,
       last_message_at: new Date().toISOString(),
       tenant_id: instance.tenant_id,
       is_group: isGroup,
@@ -356,7 +361,7 @@ async function handleMessagesUpsert(
         .single();
       if (existing) {
         await supabase.from("whatsapp_chats").update({
-          last_message: content,
+          last_message: previewText,
           last_message_at: new Date().toISOString(),
           is_group: isGroup,
           ...(!fromMe && pushName ? { push_name: pushName } : {}),
