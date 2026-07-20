@@ -18,7 +18,7 @@ export function useWhatsAppChats() {
       return data;
     },
     enabled: !!user,
-    refetchInterval: 8000, // Poll every 8s as fallback
+    refetchInterval: 20000, // Poll every 20s as fallback (realtime ja cobre a maioria)
   });
 
   useEffect(() => {
@@ -51,7 +51,7 @@ export function useWhatsAppMessages(chatId: string | null) {
       return data;
     },
     enabled: !!chatId,
-    refetchInterval: 5000, // Poll every 5s as fallback for active chat
+    refetchInterval: 15000, // Poll every 15s as fallback for active chat
   });
 
   useEffect(() => {

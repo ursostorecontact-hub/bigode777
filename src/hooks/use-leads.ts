@@ -27,7 +27,7 @@ export function useLeadQueue() {
       return data;
     },
     enabled: !!user,
-    refetchInterval: 5000,
+    refetchInterval: 15000,
   });
 }
 
