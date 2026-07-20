@@ -1,13 +1,15 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { AiAssistantWidget } from '@/components/AiAssistantWidget';
 import { AppSidebar } from '@/components/AppSidebar';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLocation } from 'react-router-dom';
-import { Bell, Search } from 'lucide-react';
+import { Bell, Search, RefreshCw } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { useQueryClient } from '@tanstack/react-query';
+import { useToast } from '@/hooks/use-toast';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,9 +23,22 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const { profile, role, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [refreshing, setRefreshing] = useState(false);
   // Esconde o widget global de IA em /conversas — a página tem seu próprio painel
   const hideGlobalAI = location.pathname === '/conversas';
   const initials = profile?.full_name?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || '?';
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await queryClient.invalidateQueries();
+      toast({ title: '✅ Atualizado!', description: 'Leads, conversas e mensagens foram recarregados.' });
+    } finally {
+      setTimeout(() => setRefreshing(false), 500);
+    }
+  };
 
   return (
     <SidebarProvider>
@@ -39,6 +54,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               </div>
             </div>
             <div className="flex items-center gap-2 ml-auto">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9"
+                onClick={handleRefresh}
+                disabled={refreshing}
+                title="Atualizar leads, conversas e mensagens"
+              >
+                <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+              </Button>
               <Button variant="ghost" size="icon" className="relative h-9 w-9">
                 <Bell className="h-4 w-4" />
                 <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-destructive" />
