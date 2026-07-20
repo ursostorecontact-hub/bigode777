@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -20,7 +21,7 @@ import { Label } from '@/components/ui/label';
 import {
   MessageSquare, Send, Loader2, Search, Phone, ArrowLeft,
   Check, CheckCheck, Clock, Mic, MicOff, UserPlus, Paperclip,
-  Image as ImageIcon, Video, FileText, X, Trash2, Tag, Settings2, Sparkles, Users, Zap, MapPin,
+  Image as ImageIcon, Video, FileText, X, Trash2, Tag, Settings2, Sparkles, Users, Zap, MapPin, ListChecks,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { AISalesPanel } from '@/components/AISalesPanel';
@@ -267,6 +268,22 @@ function ChatList({
   activeTab: ChatTab;
   onTabChange: (tab: ChatTab) => void;
 }) {
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  const toggleSelected = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const exitSelectMode = () => {
+    setSelectMode(false);
+    setSelectedIds(new Set());
+  };
+
   // Filtro por tab (grupo vs conversa individual)
   const tabFiltered = chats.filter((c) => {
     const isGroup = c.is_group ?? (c.remote_jid || '').endsWith('@g.us');
@@ -337,10 +354,40 @@ function ChatList({
 
         <div className="flex items-center justify-between mb-2">
           <h2 className="font-bold text-foreground text-lg">{activeTab === 'groups' ? 'Grupos' : 'Conversas'}</h2>
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onManageLabels} title="Gerenciar etiquetas">
+          <div className="flex items-center gap-1">
+            <Button
+              variant={selectMode ? 'secondary' : 'ghost'}
+              size="icon"
+              className="h-7 w-7"
+              onClick={() => (selectMode ? exitSelectMode() : setSelectMode(true))}
+              title="Selecionar várias conversas"
+            >
+              <ListChecks className="h-4 w-4" />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onManageLabels} title="Gerenciar etiquetas">
             <Settings2 className="h-4 w-4" />
           </Button>
+          </div>
         </div>
+        {selectMode && (
+          <div className="flex items-center justify-between mb-2 px-1 py-1.5 bg-primary/5 rounded-lg">
+            <span className="text-xs text-muted-foreground">
+              {selectedIds.size === 0 ? 'Toque nas conversas pra selecionar' : `${selectedIds.size} selecionada(s)`}
+            </span>
+            {selectedIds.size > 0 && (
+              <LabelAssignPopover
+                currentAssignments={[]}
+                onAssign={(labelId) => { selectedIds.forEach((id) => onAssign(labelId, id)); exitSelectMode(); }}
+                onUnassign={(labelId) => { selectedIds.forEach((id) => onUnassign(labelId, id)); exitSelectMode(); }}
+              >
+                <Button size="sm" className="h-7 gap-1.5 text-xs">
+                  <Tag className="h-3 w-3" />
+                  Aplicar etiqueta
+                </Button>
+              </LabelAssignPopover>
+            )}
+          </div>
+        )}
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -393,7 +440,17 @@ function ChatList({
                 selectedId === chat.id ? 'bg-primary/5 border-l-2 border-primary' : ''
               }`}
             >
-              <button onClick={() => { console.log('[ChatList] click →', chat.id); onSelect(chat.id); }} className="flex items-center gap-3 flex-1 min-w-0 text-left">
+              {selectMode && (
+                <Checkbox
+                  checked={selectedIds.has(chat.id)}
+                  onCheckedChange={() => toggleSelected(chat.id)}
+                  className="ml-1 shrink-0"
+                />
+              )}
+              <button
+                onClick={() => (selectMode ? toggleSelected(chat.id) : onSelect(chat.id))}
+                className="flex items-center gap-3 flex-1 min-w-0 text-left"
+              >
                 <Avatar className="h-11 w-11 shrink-0">
                   {chat.profile_picture_url && <AvatarImage src={chat.profile_picture_url} alt={getDisplayName(chat)} />}
                   <AvatarFallback className={`text-xs font-bold ${isGroup ? 'bg-blue-500/10 text-blue-600' : 'bg-primary/10 text-primary'}`}>
