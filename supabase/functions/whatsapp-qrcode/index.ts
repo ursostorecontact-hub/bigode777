@@ -207,6 +207,14 @@ Deno.serve(async (req) => {
         .single();
       const tenantId = adminProfile?.tenant_id || null;
 
+      // Sem tenant vinculado, a instância ficaria "órfã" — visível pra ninguém,
+      // mesmo que a conexão com o WhatsApp funcione (já vimos isso acontecer).
+      if (!tenantId) {
+        return json({
+          error: "Sua conta não está vinculada a nenhuma empresa. Fale com o administrador antes de conectar um número.",
+        }, 400);
+      }
+
       let finalInstanceName = instance_name || "";
       if (!finalInstanceName) {
         let slug = "tenant";

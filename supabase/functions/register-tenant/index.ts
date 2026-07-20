@@ -70,7 +70,6 @@ Deno.serve(async (req) => {
         slug,
         plan: plan || "basico",
         owner_id: user.id,
-        email: user.email,
       })
       .select()
       .single();
@@ -94,13 +93,25 @@ Deno.serve(async (req) => {
 
     if (memberError) {
       console.error("Member creation error:", memberError);
+      return new Response(JSON.stringify({ error: `Erro ao vincular empresa: ${memberError.message}` }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // Update profile with tenant_id and set role to admin
-    await adminClient
+    const { error: profileUpdateError } = await adminClient
       .from("profiles")
       .update({ tenant_id: tenant.id })
       .eq("id", user.id);
+
+    if (profileUpdateError) {
+      console.error("Profile update error:", profileUpdateError);
+      return new Response(JSON.stringify({ error: `Erro ao atualizar perfil: ${profileUpdateError.message}` }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     // Update user role to admin (they're the owner)
     await adminClient
