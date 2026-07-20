@@ -139,7 +139,7 @@ function QrCodeModal({ instanceId, instanceName, initialQrBase64, onConnected, o
   const { toast } = useToast();
   const [phase, setPhase] = useState<'connecting' | 'connected'>('connecting');
   const [qrBase64, setQrBase64] = useState<string | null>(initialQrBase64);
-  const [countdown, setCountdown] = useState(60);
+  const [countdown, setCountdown] = useState(20);
   const [loading, setLoading] = useState(!initialQrBase64);
 
   // Stable refs for callbacks and internal flags
@@ -151,7 +151,7 @@ function QrCodeModal({ instanceId, instanceName, initialQrBase64, onConnected, o
   const countdownTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const refreshingRef = useRef(false);
-  const countdownValRef = useRef(60);
+  const countdownValRef = useRef(20);
 
   const stopTimers = useCallback(() => {
     if (countdownTimerRef.current) { clearInterval(countdownTimerRef.current); countdownTimerRef.current = null; }
@@ -176,8 +176,8 @@ function QrCodeModal({ instanceId, instanceName, initialQrBase64, onConnected, o
       }
       if (result.qrcode_base64) {
         setQrBase64(normalizeBase64(result.qrcode_base64 as string));
-        countdownValRef.current = 60;
-        setCountdown(60);
+        countdownValRef.current = 20;
+        setCountdown(20);
       } else if (result.error) {
         toast({ title: 'Erro ao atualizar QR', description: result.error, variant: 'destructive' });
       }
@@ -218,8 +218,8 @@ function QrCodeModal({ instanceId, instanceName, initialQrBase64, onConnected, o
       countdownValRef.current -= 1;
       setCountdown(countdownValRef.current);
       if (countdownValRef.current <= 0) {
-        countdownValRef.current = 60;
-        setCountdown(60);
+        countdownValRef.current = 20;
+        setCountdown(20);
         refreshQr();
       }
     }, 1000);
@@ -295,7 +295,7 @@ function QrCodeModal({ instanceId, instanceName, initialQrBase64, onConnected, o
                 <span>QR expira em</span>
                 <span className={countdown <= 10 ? 'text-amber-500 font-bold' : ''}>{countdown}s</span>
               </div>
-              <Progress value={(countdown / 60) * 100} className="h-1.5" />
+              <Progress value={(countdown / 20) * 100} className="h-1.5" />
             </div>
 
             <Button

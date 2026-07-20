@@ -375,7 +375,7 @@ Deno.serve(async (req) => {
         instance_id: saved.id,
         instance_name: finalInstanceName,
         qrcode_base64: qrcodeBase64,
-        expires_at: qrcodeBase64 ? new Date(Date.now() + 60000).toISOString() : null,
+        expires_at: qrcodeBase64 ? new Date(Date.now() + 20000).toISOString() : null,
         instance: saved,
         alreadyConnected: initialStatus === "connected",
         warning: evolutionWarning,
@@ -425,7 +425,7 @@ Deno.serve(async (req) => {
 
       return json({
         qrcode_base64: qrcodeBase64,
-        expires_at: new Date(Date.now() + 60000).toISOString(),
+        expires_at: new Date(Date.now() + 20000).toISOString(),
       });
     }
 
