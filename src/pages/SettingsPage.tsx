@@ -14,7 +14,6 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Building2, Users, Link, Key, Loader2, UserPlus, Trash2, Smartphone, KeyRound, RefreshCw, Sparkles, Clock } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
-import { WhatsAppSettingsSection } from '@/components/WhatsAppSettingsSection';
 import { Switch } from '@/components/ui/switch';
 import { useSettings, useUpdateSettings, useProfilesWithRoles, useUpdateUserRole } from '@/hooks/use-leads';
 import { useToast } from '@/hooks/use-toast';
@@ -544,7 +543,20 @@ export default function SettingsPage() {
       </Card>
 
       {/* WhatsApp Connection */}
-      <WhatsAppSettingsSection />
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Smartphone className="h-4 w-4" />
+            Conexão WhatsApp
+          </CardTitle>
+          <CardDescription>Conecte e gerencie os números de WhatsApp da sua empresa</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button asChild>
+            <a href="/whatsapp">Ir para WhatsApp</a>
+          </Button>
+        </CardContent>
+      </Card>
 
       {/* AI Settings */}
       <AiSettingsSection />
