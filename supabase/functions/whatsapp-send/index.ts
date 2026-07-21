@@ -139,10 +139,42 @@ Deno.serve(async (req) => {
         messageId = evoData?.key?.id || null;
 
       } else if ((actualType === "image" || actualType === "video" || actualType === "document") && media_base64) {
+        // Vídeo: tenta "limpar" o arquivo primeiro (remove trilhas extras de
+        // metadados que celulares tipo iPhone incluem, e que o WhatsApp às
+        // vezes rejeita silenciosamente em conexões não-oficiais como essa).
+        // Se a conversão falhar por qualquer motivo, cai pra "documento"
+        // (sempre funciona), pra nunca ficar sem enviar nada.
+        let effectiveBase64 = media_base64;
+        let sendAsDocument = false;
+        if (actualType === "video") {
+          try {
+            const convertSecret = Deno.env.get("VIDEO_CONVERT_SECRET");
+            const convertRes = await fetch("http://76.13.230.7:8765/convert-video", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ video_base64: media_base64, secret: convertSecret }),
+              signal: AbortSignal.timeout(45000),
+            });
+            if (convertRes.ok) {
+              const convertData = await convertRes.json();
+              if (convertData.video_base64) {
+                effectiveBase64 = convertData.video_base64;
+              } else {
+                sendAsDocument = true;
+              }
+            } else {
+              sendAsDocument = true;
+            }
+          } catch (convertErr) {
+            console.error("Erro ao converter vídeo, enviando como documento:", convertErr);
+            sendAsDocument = true;
+          }
+        }
+
         // Upload media to storage
         const ext = actualType === "image" ? "jpg" : actualType === "video" ? "mp4" : (media_filename?.split('.').pop() || "bin");
         const filename = `${actualType}/${Date.now()}_${crypto.randomUUID()}.${ext}`;
-        const mediaBuffer = Uint8Array.from(atob(media_base64), c => c.charCodeAt(0));
+        const mediaBuffer = Uint8Array.from(atob(effectiveBase64), c => c.charCodeAt(0));
 
         const { error: uploadErr } = await supabase.storage
           .from("whatsapp-media")
@@ -168,7 +200,7 @@ Deno.serve(async (req) => {
         // silenciosamente pelo WhatsApp em conexões não-oficiais como essa —
         // mandar como "documento" costuma contornar isso (cliente recebe como
         // anexo em vez de player de vídeo embutido, mas realmente chega).
-        const evoMediaType = actualType === "video" ? "document" : actualType;
+        const evoMediaType = sendAsDocument ? "document" : actualType;
         const evoUrl = `${instanceUrl}/message/sendMedia/${instance.instance_name}`;
         const evoRes = await fetch(evoUrl, {
           method: "POST",
