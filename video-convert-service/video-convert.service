@@ -1,0 +1,16 @@
+[Unit]
+Description=Flash CRMs - Video Convert Service
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/video-convert-service
+Environment=CONVERT_SECRET=04d454077aff4e939a32d5b7689078d279ae38832a29ae08b230e20dc7a3e8d0
+Environment=PORT=8765
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=5
+User=root
+
+[Install]
+WantedBy=multi-user.target
