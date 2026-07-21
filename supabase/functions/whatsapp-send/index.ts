@@ -111,6 +111,10 @@ Deno.serve(async (req) => {
 
         if (uploadErr) {
           console.error("Upload error:", uploadErr);
+          return new Response(JSON.stringify({ error: `Erro ao enviar mídia: ${uploadErr.message}` }), {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
         }
 
         const { data: publicUrlData } = supabase.storage
@@ -149,6 +153,10 @@ Deno.serve(async (req) => {
 
         if (uploadErr) {
           console.error("Upload error:", uploadErr);
+          return new Response(JSON.stringify({ error: `Erro ao enviar mídia: ${uploadErr.message}` }), {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
         }
 
         const { data: publicUrlData } = supabase.storage
