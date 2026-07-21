@@ -164,7 +164,11 @@ Deno.serve(async (req) => {
           .getPublicUrl(filename);
         savedMediaUrl = publicUrlData?.publicUrl || null;
 
-        // Send media via Evolution API
+        // Send media via Evolution API. Vídeo nativo tem sido bloqueado
+        // silenciosamente pelo WhatsApp em conexões não-oficiais como essa —
+        // mandar como "documento" costuma contornar isso (cliente recebe como
+        // anexo em vez de player de vídeo embutido, mas realmente chega).
+        const evoMediaType = actualType === "video" ? "document" : actualType;
         const evoUrl = `${instanceUrl}/message/sendMedia/${instance.instance_name}`;
         const evoRes = await fetch(evoUrl, {
           method: "POST",
@@ -174,10 +178,10 @@ Deno.serve(async (req) => {
           },
           body: JSON.stringify({
             number,
-            mediatype: actualType,
+            mediatype: evoMediaType,
             media: savedMediaUrl,
             caption: content || "",
-            fileName: media_filename || undefined,
+            fileName: media_filename || (actualType === "video" ? `video_${Date.now()}.mp4` : undefined),
           }),
         });
         evoData = await evoRes.json();
