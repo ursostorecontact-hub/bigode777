@@ -103,6 +103,8 @@ export function useAssignLabel() {
   const { user } = useAuth();
   return useMutation({
     mutationFn: async ({ labelId, chatId, leadId }: { labelId: string; chatId?: string; leadId?: string }) => {
+      // A sincronização com o "outro lado" (conversa ⇄ lead da mesma pessoa)
+      // agora é feita direto no banco (gatilho), de forma confiável.
       const { error } = await supabase.from('label_assignments').insert({
         label_id: labelId,
         chat_id: chatId || null,
@@ -110,34 +112,6 @@ export function useAssignLabel() {
         user_id: user!.id,
       });
       if (error) throw error;
-
-      // Espelha a etiqueta pro "outro lado" (conversa ⇄ lead), já que são a
-      // mesma pessoa na prática — sem isso, etiquetar em Conversas não refletia
-      // em Leads (e vice-versa).
-      try {
-        if (chatId) {
-          const { data: chat } = await supabase.from('whatsapp_chats').select('contact_phone').eq('id', chatId).maybeSingle();
-          const cleanPhone = chat?.contact_phone?.replace(/\D/g, '');
-          if (cleanPhone) {
-            const { data: matchingLeads } = await supabase.from('leads').select('id').ilike('phone', `%${cleanPhone.slice(-8)}%`);
-            for (const lead of matchingLeads || []) {
-              await supabase.from('label_assignments').insert({ label_id: labelId, lead_id: lead.id, user_id: user!.id }).select();
-            }
-          }
-        } else if (leadId) {
-          const { data: lead } = await supabase.from('leads').select('phone').eq('id', leadId).maybeSingle();
-          const cleanPhone = lead?.phone?.replace(/\D/g, '');
-          if (cleanPhone) {
-            const { data: matchingChats } = await supabase.from('whatsapp_chats').select('id').ilike('contact_phone', `%${cleanPhone.slice(-8)}%`);
-            for (const chat of matchingChats || []) {
-              await supabase.from('label_assignments').insert({ label_id: labelId, chat_id: chat.id, user_id: user!.id }).select();
-            }
-          }
-        }
-      } catch {
-        // Se já existir do outro lado (ou não encontrar par), tudo bem — não é
-        // um erro que precise travar a ação principal, que já foi concluída.
-      }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['label-assignments'] }),
   });
@@ -152,31 +126,6 @@ export function useUnassignLabel() {
       if (leadId) query = query.eq('lead_id', leadId);
       const { error } = await query;
       if (error) throw error;
-
-      // Remove também do "outro lado" (conversa ⇄ lead), pra ficar sincronizado.
-      try {
-        if (chatId) {
-          const { data: chat } = await supabase.from('whatsapp_chats').select('contact_phone').eq('id', chatId).maybeSingle();
-          const cleanPhone = chat?.contact_phone?.replace(/\D/g, '');
-          if (cleanPhone) {
-            const { data: matchingLeads } = await supabase.from('leads').select('id').ilike('phone', `%${cleanPhone.slice(-8)}%`);
-            for (const lead of matchingLeads || []) {
-              await supabase.from('label_assignments').delete().eq('label_id', labelId).eq('lead_id', lead.id);
-            }
-          }
-        } else if (leadId) {
-          const { data: lead } = await supabase.from('leads').select('phone').eq('id', leadId).maybeSingle();
-          const cleanPhone = lead?.phone?.replace(/\D/g, '');
-          if (cleanPhone) {
-            const { data: matchingChats } = await supabase.from('whatsapp_chats').select('id').ilike('contact_phone', `%${cleanPhone.slice(-8)}%`);
-            for (const chat of matchingChats || []) {
-              await supabase.from('label_assignments').delete().eq('label_id', labelId).eq('chat_id', chat.id);
-            }
-          }
-        }
-      } catch {
-        /* mesma lógica: não trava a ação principal, que já foi concluída */
-      }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['label-assignments'] }),
   });
