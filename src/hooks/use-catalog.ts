@@ -82,13 +82,13 @@ export interface ProductFilters {
 
 export function useProductCategories() {
   const { user } = useAuth();
+  const { activeTenantId } = useTenant();
   return useQuery({
-    queryKey: ['product-categories'],
+    queryKey: ['product-categories', activeTenantId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('product_categories')
-        .select('*')
-        .order('name');
+      let query = supabase.from('product_categories').select('*');
+      if (activeTenantId) query = query.eq('tenant_id', activeTenantId);
+      const { data, error } = await query.order('name');
       if (error) throw error;
       return (data ?? []) as ProductCategory[];
     },
@@ -158,13 +158,15 @@ export function useDeleteCategory() {
 
 export function useProducts(filters?: ProductFilters) {
   const { user } = useAuth();
+  const { activeTenantId } = useTenant();
   return useQuery({
-    queryKey: ['products', filters],
+    queryKey: ['products', filters, activeTenantId],
     queryFn: async () => {
       let query = supabase
         .from('products')
         .select('*, product_categories(id, name)');
 
+      if (activeTenantId) query = query.eq('tenant_id', activeTenantId);
       if (filters?.search) {
         query = query.or(`name.ilike.%${filters.search}%,description.ilike.%${filters.search}%,sku.ilike.%${filters.search}%`);
       }

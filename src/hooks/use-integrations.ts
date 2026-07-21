@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useTenant } from '@/contexts/TenantContext';
 
 // ── WhatsApp Assignments ──
 
@@ -62,13 +63,13 @@ export function useSaveWhatsAppAssignments() {
 }
 
 export function useWhatsAppInstances() {
+  const { activeTenantId } = useTenant();
   return useQuery({
-    queryKey: ['whatsapp_instances'],
+    queryKey: ['whatsapp_instances', activeTenantId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('whatsapp_instances')
-        .select('*')
-        .order('created_at', { ascending: false });
+      let query = supabase.from('whatsapp_instances').select('*');
+      if (activeTenantId) query = query.eq('tenant_id', activeTenantId);
+      const { data, error } = await query.order('created_at', { ascending: false });
       if (error) throw error;
       return data;
     },

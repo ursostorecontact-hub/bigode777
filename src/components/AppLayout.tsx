@@ -4,7 +4,8 @@ import { AiAssistantWidget } from '@/components/AiAssistantWidget';
 import { AppSidebar } from '@/components/AppSidebar';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLocation } from 'react-router-dom';
-import { Bell, Search, RefreshCw } from 'lucide-react';
+import { useTenant } from '@/contexts/TenantContext';
+import { Bell, Search, RefreshCw, LogOut as ExitIcon } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -21,6 +22,7 @@ import { useNavigate } from 'react-router-dom';
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const { profile, role, signOut } = useAuth();
+  const { isImpersonating, activeTenant, exitImpersonation } = useTenant();
   const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
@@ -45,6 +47,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       <div className="min-h-screen flex w-full">
         <AppSidebar />
         <div className="flex-1 flex flex-col min-w-0">
+          {isImpersonating && (
+            <div className="h-9 flex items-center justify-center gap-2 bg-amber-500 text-amber-950 text-sm font-medium px-4 sticky top-0 z-40">
+              👁️ Você está vendo a empresa: <strong>{activeTenant?.name}</strong>
+              <Button size="sm" variant="ghost" className="h-6 gap-1 text-amber-950 hover:bg-amber-600/20 ml-2" onClick={exitImpersonation}>
+                <ExitIcon className="h-3 w-3" /> Sair
+              </Button>
+            </div>
+          )}
           <header className="h-14 flex items-center gap-3 px-4 border-b bg-card/50 backdrop-blur-sm sticky top-0 z-30">
             <SidebarTrigger className="shrink-0" />
             <div className="flex-1 max-w-md">

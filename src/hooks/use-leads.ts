@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { TablesUpdate } from '@/integrations/supabase/types';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTenant } from '@/contexts/TenantContext';
 import type { LeadStatus } from '@/types/crm';
 import { useToast } from '@/hooks/use-toast';
 import { triggerAutomation } from '@/hooks/use-automations';
@@ -14,15 +15,13 @@ type SettingsUpdatePayload = { id: string } & TablesUpdate<'settings'>;
 // a cada 5s, pra a "pesca" parecer ao vivo (ver lead sumir quando outro pega).
 export function useLeadQueue() {
   const { user } = useAuth();
+  const { activeTenantId } = useTenant();
   return useQuery({
-    queryKey: ['lead-queue'],
+    queryKey: ['lead-queue', activeTenantId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('leads')
-        .select('*')
-        .is('assigned_to', null)
-        .eq('status', 'novo') // só leads que ainda não tiveram nenhum atendimento
-        .order('created_at', { ascending: false });
+      let query = supabase.from('leads').select('*').is('assigned_to', null).eq('status', 'novo');
+      if (activeTenantId) query = query.eq('tenant_id', activeTenantId);
+      const { data, error } = await query.order('created_at', { ascending: false });
       if (error) throw error;
       return data;
     },
@@ -64,13 +63,13 @@ export function useClaimLead() {
 
 export function useLeads() {
   const { user } = useAuth();
+  const { activeTenantId } = useTenant();
   return useQuery({
-    queryKey: ['leads'],
+    queryKey: ['leads', activeTenantId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('leads')
-        .select('*')
-        .order('created_at', { ascending: false });
+      let query = supabase.from('leads').select('*');
+      if (activeTenantId) query = query.eq('tenant_id', activeTenantId);
+      const { data, error } = await query.order('created_at', { ascending: false });
       if (error) throw error;
       return data;
     },
@@ -399,10 +398,13 @@ export function useDeleteLead() {
 }
 
 export function useClients() {
+  const { activeTenantId } = useTenant();
   return useQuery({
-    queryKey: ['clients'],
+    queryKey: ['clients', activeTenantId],
     queryFn: async () => {
-      const { data, error } = await supabase.from('clients').select('*').order('created_at', { ascending: false });
+      let query = supabase.from('clients').select('*');
+      if (activeTenantId) query = query.eq('tenant_id', activeTenantId);
+      const { data, error } = await query.order('created_at', { ascending: false });
       if (error) throw error;
       return data;
     },
@@ -411,10 +413,13 @@ export function useClients() {
 
 export function useTasks() {
   const { user } = useAuth();
+  const { activeTenantId } = useTenant();
   return useQuery({
-    queryKey: ['tasks'],
+    queryKey: ['tasks', activeTenantId],
     queryFn: async () => {
-      const { data, error } = await supabase.from('tasks').select('*').order('due_date', { ascending: true });
+      let query = supabase.from('tasks').select('*');
+      if (activeTenantId) query = query.eq('tenant_id', activeTenantId);
+      const { data, error } = await query.order('due_date', { ascending: true });
       if (error) throw error;
       return data;
     },
@@ -529,10 +534,13 @@ export function useLeadSources() {
 
 export function useSettings() {
   const { user } = useAuth();
+  const { activeTenantId } = useTenant();
   return useQuery({
-    queryKey: ['settings'],
+    queryKey: ['settings', activeTenantId],
     queryFn: async () => {
-      const { data, error } = await supabase.from('settings').select('*').limit(1).maybeSingle();
+      let query = supabase.from('settings').select('*');
+      if (activeTenantId) query = query.eq('tenant_id', activeTenantId);
+      const { data, error } = await query.limit(1).maybeSingle();
       if (error) throw error;
       return data;
     },

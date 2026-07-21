@@ -30,12 +30,18 @@ interface Stats {
 }
 
 export default function SuperAdminPage() {
-  const { isSuperAdmin } = useTenant();
+  const { isSuperAdmin, enterTenant } = useTenant();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [tenants, setTenants] = useState<TenantRow[]>([]);
   const [stats, setStats] = useState<Stats>({ totalTenants: 0, activeTenants: 0, totalUsers: 0, totalLeads: 0 });
   const [loading, setLoading] = useState(true);
+  const [entering, setEntering] = useState<string | null>(null);
+
+  const handleEnter = async (tenantId: string) => {
+    setEntering(tenantId);
+    await enterTenant(tenantId);
+  };
 
   useEffect(() => {
     if (!isSuperAdmin) {
@@ -194,13 +200,23 @@ export default function SuperAdminPage() {
                         {new Date(t.created_at).toLocaleDateString('pt-BR')}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          size="sm"
-                          variant={t.status === 'active' ? 'destructive' : 'default'}
-                          onClick={() => toggleTenantStatus(t.id, t.status)}
-                        >
-                          {t.status === 'active' ? 'Suspender' : 'Ativar'}
-                        </Button>
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            disabled={entering === t.id}
+                            onClick={() => handleEnter(t.id)}
+                          >
+                            {entering === t.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Entrar'}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant={t.status === 'active' ? 'destructive' : 'default'}
+                            onClick={() => toggleTenantStatus(t.id, t.status)}
+                          >
+                            {t.status === 'active' ? 'Suspender' : 'Ativar'}
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}

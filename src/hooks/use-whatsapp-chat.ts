@@ -2,18 +2,19 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTenant } from '@/contexts/TenantContext';
 
 export function useWhatsAppChats() {
   const { user } = useAuth();
+  const { activeTenantId } = useTenant();
   const qc = useQueryClient();
 
   const query = useQuery({
-    queryKey: ['whatsapp-chats'],
+    queryKey: ['whatsapp-chats', activeTenantId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('whatsapp_chats')
-        .select('*')
-        .order('last_message_at', { ascending: false });
+      let q = supabase.from('whatsapp_chats').select('*');
+      if (activeTenantId) q = q.eq('tenant_id', activeTenantId);
+      const { data, error } = await q.order('last_message_at', { ascending: false });
       if (error) throw error;
       return data;
     },

@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTenant } from '@/contexts/TenantContext';
 import { useToast } from '@/hooks/use-toast';
 import type { Tables } from '@/integrations/supabase/types';
 
@@ -8,13 +9,13 @@ type Automation = Tables<'automations'>;
 
 export function useAutomations() {
   const { user } = useAuth();
+  const { activeTenantId } = useTenant();
   return useQuery({
-    queryKey: ['automations'],
+    queryKey: ['automations', activeTenantId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('automations')
-        .select('*')
-        .order('created_at', { ascending: false });
+      let query = supabase.from('automations').select('*');
+      if (activeTenantId) query = query.eq('tenant_id', activeTenantId);
+      const { data, error } = await query.order('created_at', { ascending: false });
       if (error) throw error;
       return data as Automation[];
     },
