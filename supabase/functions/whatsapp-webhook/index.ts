@@ -206,7 +206,16 @@ async function handleMessagesUpsert(
     let mediaCaption: string | null = null;
     let hintMimeType: string | undefined;
 
-    const message = (msg as Record<string, unknown>).message as Record<string, unknown> || {};
+    let message = (msg as Record<string, unknown>).message as Record<string, unknown> || {};
+
+    // O WhatsApp "embrulha" o conteúdo real numa camada extra em alguns casos
+    // (visualização única, mensagens efêmeras) — sem desembrulhar isso primeiro,
+    // o áudio/foto real fica escondido e a gente marca como "não suportada".
+    const wrapper = (message.viewOnceMessage || message.viewOnceMessageV2 || message.ephemeralMessage) as
+      { message?: Record<string, unknown> } | undefined;
+    if (wrapper?.message) {
+      message = wrapper.message;
+    }
 
     if (message.conversation) {
       content = message.conversation as string;

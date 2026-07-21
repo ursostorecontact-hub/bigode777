@@ -234,6 +234,21 @@ function formatDuration(secs: number) {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
+// Áudios gravados pelo navegador (WebM/Opus) às vezes não guardam a duração
+// certa no cabeçalho do arquivo — o player mostra "00:00" até isso ser corrigido.
+// Esse truque força o navegador a recalcular a duração real.
+function fixAudioDuration(e: React.SyntheticEvent<HTMLAudioElement>) {
+  const audio = e.currentTarget;
+  if (audio.duration === Infinity || isNaN(audio.duration)) {
+    audio.currentTime = 1e101;
+    const onUpdate = () => {
+      audio.currentTime = 0;
+      audio.removeEventListener('timeupdate', onUpdate);
+    };
+    audio.addEventListener('timeupdate', onUpdate);
+  }
+}
+
 // ── Chat List ──
 type ChatTab = 'conversations' | 'groups';
 
@@ -848,7 +863,7 @@ function MessageArea({
                             {msg.message_type === 'audio' && isMediaAccessible(msg.media_url) ? (
                               <div className="flex items-center gap-2 min-w-[240px]">
                                 <Mic className="h-4 w-4 shrink-0 opacity-70" />
-                                <audio controls preload="auto" className="h-10 w-full max-w-[260px]" style={{ minWidth: '200px' }}>
+                                <audio controls preload="auto" onLoadedMetadata={fixAudioDuration} className="h-10 w-full max-w-[260px]" style={{ minWidth: '200px' }}>
                                   <source src={msg.media_url!} type="audio/ogg; codecs=opus" />
                                   <source src={msg.media_url!} type="audio/ogg" />
                                   <source src={msg.media_url!} />
@@ -868,6 +883,7 @@ function MessageArea({
                             <audio
                               controls
                               preload="auto"
+                              onLoadedMetadata={fixAudioDuration}
                               className="h-10 w-full max-w-[260px]"
                               style={{ minWidth: '200px' }}
                             >

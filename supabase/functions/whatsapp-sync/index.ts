@@ -332,7 +332,12 @@ Deno.serve(async (req) => {
               let messageType = "text";
               let mediaUrl = null;
 
-              const message = msg.message || {};
+              let message = msg.message || {};
+              const wrapper = (message.viewOnceMessage || message.viewOnceMessageV2 || message.ephemeralMessage) as
+                { message?: Record<string, unknown> } | undefined;
+              if (wrapper?.message) {
+                message = wrapper.message;
+              }
               if (message.conversation) {
                 content = message.conversation;
               } else if (message.extendedTextMessage?.text) {
