@@ -96,6 +96,46 @@ async function downloadAndStoreMedia(
   }
 }
 
+// ── Detecção de origem por anúncio (click-to-WhatsApp) ─────────────────────
+// Quando alguém clica em "Enviar mensagem" num anúncio do Facebook/Instagram,
+// o WhatsApp anexa esse metadado na primeira mensagem. Sem ler isso aqui, o
+// CRM nunca sabe de verdade se o lead veio de anúncio (ou de qual) — só resta
+// a IA "advinhar" pelo texto da conversa, o que é impreciso.
+interface AdReferral {
+  sourceType?: string;
+  sourceUrl?: string;
+  title?: string;
+  ctwaClid?: string;
+}
+
+function extractAdReferral(message: Record<string, unknown>): AdReferral | null {
+  for (const key of Object.keys(message)) {
+    if (!key.endsWith("Message")) continue;
+    const sub = message[key] as Record<string, unknown> | undefined;
+    const ctx = sub?.contextInfo as Record<string, unknown> | undefined;
+    const ad = ctx?.externalAdReply as Record<string, unknown> | undefined;
+    if (ad) {
+      return {
+        sourceType: ad.sourceType as string | undefined,
+        sourceUrl: ad.sourceUrl as string | undefined,
+        title: ad.title as string | undefined,
+        ctwaClid: ad.ctwaClid as string | undefined,
+      };
+    }
+  }
+  return null;
+}
+
+// Transforma o metadado técnico do anúncio numa origem legível (o que aparece
+// na coluna "Origem" da tela de Leads).
+function labelFromAdReferral(ad: AdReferral | null): string | null {
+  if (!ad) return null;
+  const url = (ad.sourceUrl || "").toLowerCase();
+  if (url.includes("instagram")) return "Instagram Ads";
+  if (url.includes("facebook") || url.includes("fb.")) return "Facebook Ads";
+  return "Anúncio (Meta)";
+}
+
 async function fetchProfilePic(evoUrl: string, evoKey: string, instanceName: string, contactPhone: string): Promise<string | null> {
   try {
     const res = await fetch(
@@ -339,6 +379,10 @@ async function handleMessagesUpsert(
       .maybeSingle();
     const isNewChat = !existingChatCheck;
 
+    // Detecta se essa mensagem carrega o metadado de anúncio (clique no Facebook/Instagram)
+    const adReferral = extractAdReferral(message);
+    const adLabel = labelFromAdReferral(adReferral);
+
     // Prévia amigável pra lista de conversas — location salva coordenadas em JSON
     // no "content" da mensagem em si (necessário pro mapa funcionar), mas ninguém
     // deveria ver esse JSON cru como texto de prévia.
@@ -354,6 +398,13 @@ async function handleMessagesUpsert(
       tenant_id: instance.tenant_id,
       is_group: isGroup,
     };
+
+    // Só grava o anúncio na primeira vez que ele aparece (normalmente só vem na
+    // mensagem inicial do clique) — não queremos apagar isso depois.
+    if (adReferral && isNewChat) {
+      upsertData.ad_title = adReferral.title || null;
+      upsertData.ad_source_url = adReferral.sourceUrl || null;
+    }
 
     if (!isGroup && (!fromMe || contactName)) upsertData.contact_name = contactName;
     if (pushName && !fromMe) upsertData.push_name = pushName;
@@ -407,7 +458,11 @@ async function handleMessagesUpsert(
           .insert({
             name: contactName || pushName || contactPhone,
             phone: contactPhone,
-            source: null, // a IA descobre a origem lendo a conversa
+            // Se veio de um clique em anúncio, já sabemos a origem real —
+            // só deixamos null (pra IA tentar descobrir) quando não veio de anúncio.
+            source: adLabel,
+            ad_title: adReferral?.title || null,
+            ad_source_url: adReferral?.sourceUrl || null,
             status: "novo",
             pipeline_stage: "novo",
             tenant_id: instance.tenant_id,
@@ -455,7 +510,9 @@ async function handleMessagesUpsert(
           const { error: leadError } = await supabase.from("leads").insert({
             name: contactName || contactPhone,
             phone: contactPhone,
-            source: "WhatsApp",
+            source: adLabel || "WhatsApp",
+            ad_title: adReferral?.title || null,
+            ad_source_url: adReferral?.sourceUrl || null,
             notes: `Primeira mensagem: ${content}`,
             status: "novo",
             pipeline_stage: "novo",

@@ -164,10 +164,12 @@ informada nos dados do lead.`;
       ai_scored_at: new Date().toISOString(),
     };
 
-    // Só atualiza a origem se a IA achou uma pista real E o lead não veio de um
-    // anúncio confirmado da Meta (esses já têm a origem certa, vinda direto da
-    // plataforma de anúncios — não deixamos a IA "adivinhar" por cima disso).
-    if (parsed.source && !lead.meta_lead_id) {
+    // Só atualiza a origem se a IA achou uma pista real E o lead ainda não tem
+    // uma origem confirmada — seja de um formulário de Lead Ads (meta_lead_id),
+    // seja de um clique em anúncio detectado no próprio WhatsApp (ad_title/source
+    // já preenchidos pelo webhook). Nesses casos a origem já é certa; não deixamos
+    // a IA "adivinhar" por cima com base só no texto da conversa.
+    if (parsed.source && !lead.meta_lead_id && !lead.source) {
       updates.source = parsed.source;
     }
 

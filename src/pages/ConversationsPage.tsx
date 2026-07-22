@@ -766,6 +766,15 @@ export function MessageArea({
             {isGroup && (
               <Badge variant="secondary" className="text-[10px] h-4 px-1 shrink-0">Grupo</Badge>
             )}
+            {chat?.ad_title && (
+              <Badge
+                variant="outline"
+                className="text-[10px] h-4 px-1 shrink-0 border-primary/40 text-primary"
+                title={`Veio de um anúncio: ${chat.ad_title}`}
+              >
+                📢 Anúncio
+              </Badge>
+            )}
           </div>
           {!isGroup && contactPhone && (
             <p className="text-xs text-muted-foreground">+{contactPhone}</p>
