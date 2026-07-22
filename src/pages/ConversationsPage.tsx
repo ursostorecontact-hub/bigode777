@@ -39,6 +39,7 @@ import { LabelManagerDialog, LabelAssignPopover, LabelBadges } from '@/component
 import { useAudioRecorder } from '@/hooks/useAudioRecorder';
 import { useQuickReplies, fetchMediaAsBase64, type QuickReply } from '@/hooks/use-quick-replies';
 import { QuickReplyManagerDialog } from '@/components/QuickReplyManager';
+import ManagerConversationsView from '@/components/ManagerConversationsView';
 
 // Returns true when a media_url is publicly accessible by the browser.
 // URLs pointing to localhost, private IPs, or internal hostnames are not accessible.
@@ -520,18 +521,21 @@ function ChatList({
 }
 
 // ── Message Area ──
-function MessageArea({
+export function MessageArea({
   chatId,
   chat,
   onBack,
   onToggleAI,
   aiPanelOpen,
+  headerExtra,
 }: {
   chatId: string;
   chat: any;
   onBack: () => void;
-  onToggleAI: () => void;
-  aiPanelOpen: boolean;
+  onToggleAI?: () => void;
+  aiPanelOpen?: boolean;
+  // Conteúdo extra no cabeçalho do chat (ex: seletor de "mudar vendedor" no painel do gerente).
+  headerExtra?: React.ReactNode;
 }) {
   const { data: messages, isLoading } = useWhatsAppMessages(chatId);
   const { role } = useAuth();
@@ -768,6 +772,7 @@ function MessageArea({
           )}
         </div>
         <div className="flex items-center gap-1">
+          {headerExtra}
           <Button
             variant="ghost"
             size="icon"
@@ -1095,16 +1100,18 @@ function MessageArea({
               disabled={sendMessage.isPending || sending}
             />
             {/* Botão IA — dentro do flow, não flutuante */}
-            <Button
-              variant="ghost"
-              size="icon"
-              className={`h-10 w-10 shrink-0 ${aiPanelOpen ? 'text-orange-500' : 'text-muted-foreground hover:text-orange-500'}`}
-              onClick={onToggleAI}
-              title="Sugestão de IA"
-              disabled={sending}
-            >
-              <Sparkles className="h-5 w-5" />
-            </Button>
+            {onToggleAI && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className={`h-10 w-10 shrink-0 ${aiPanelOpen ? 'text-orange-500' : 'text-muted-foreground hover:text-orange-500'}`}
+                onClick={onToggleAI}
+                title="Sugestão de IA"
+                disabled={sending}
+              >
+                <Sparkles className="h-5 w-5" />
+              </Button>
+            )}
             <Button
               onClick={handleSend}
               disabled={!text.trim() || sendMessage.isPending || sending}
@@ -1195,7 +1202,7 @@ function EmptyChat() {
 }
 
 // ── Main Page ──
-export default function ConversationsPage() {
+function ConversationsPageInner() {
   const { data: chats, isLoading } = useWhatsAppChats();
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
@@ -1269,4 +1276,15 @@ export default function ConversationsPage() {
       <LabelManagerDialog open={showLabelManager} onOpenChange={setShowLabelManager} />
     </div>
   );
+}
+
+// Gerente/administrador vê o painel por vendedor (balões ao vivo); fora dele,
+// só acessa outras conversas pescando na Fila de Leads, igual todo mundo.
+// Vendedor comum continua vendo a lista normal (já filtrada por RLS: só as próprias).
+export default function ConversationsPage() {
+  const { role } = useAuth();
+  if (role === 'admin' || role === 'manager') {
+    return <ManagerConversationsView />;
+  }
+  return <ConversationsPageInner />;
 }
