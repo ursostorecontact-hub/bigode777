@@ -383,6 +383,16 @@ async function handleMessagesUpsert(
     const adReferral = extractAdReferral(message);
     const adLabel = labelFromAdReferral(adReferral);
 
+    // 🔍 DEBUG TEMPORÁRIO: loga a mensagem crua de toda conversa nova, pra a gente
+    // achar onde o WhatsApp realmente coloca o metadado de anúncio nesse ambiente
+    // (Evolution API pode entregar isso numa estrutura um pouco diferente do padrão).
+    // Remover depois de confirmar o formato certo.
+    if (isNewChat && !isGroup && !fromMe) {
+      console.log("[webhook][AD-DEBUG] adReferral encontrado:", JSON.stringify(adReferral));
+      console.log("[webhook][AD-DEBUG] message keys:", Object.keys(message));
+      console.log("[webhook][AD-DEBUG] message completo:", JSON.stringify(message));
+    }
+
     // Prévia amigável pra lista de conversas — location salva coordenadas em JSON
     // no "content" da mensagem em si (necessário pro mapa funcionar), mas ninguém
     // deveria ver esse JSON cru como texto de prévia.
