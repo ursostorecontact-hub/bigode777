@@ -133,11 +133,11 @@ Deno.serve(async (req) => {
           .getPublicUrl(filename);
         savedMediaUrl = publicUrlData?.publicUrl || null;
 
-        // Envia como mídia genérica (mesma rota confiável já usada pra imagem/
-        // documento), em vez do endpoint específico de nota de voz — esse
-        // endpoint espera um ogg/opus genuíno e não converte outros formatos,
-        // então qualquer áudio gravado no navegador (webm) chegava mudo por ali.
-        const evoUrl = `${instanceUrl}/message/sendMedia/${instance.instance_name}`;
+        // Envia pelo endpoint nativo de nota de voz. Com o formato REAL do
+        // arquivo declarado certinho (em vez do "audio/ogg" forçado de antes),
+        // a conversão interna da Evolution/Baileys consegue detectar e converter
+        // corretamente — é isso que estava quebrando a reprodução antes.
+        const evoUrl = `${instanceUrl}/message/sendWhatsAppAudio/${instance.instance_name}`;
         const evoRes = await fetch(evoUrl, {
           method: "POST",
           headers: {
@@ -146,9 +146,7 @@ Deno.serve(async (req) => {
           },
           body: JSON.stringify({
             number,
-            mediatype: "audio",
-            media: savedMediaUrl,
-            fileName: `audio.${audioExt}`,
+            audio: savedMediaUrl,
           }),
         });
         evoData = await evoRes.json();
@@ -249,6 +247,7 @@ Deno.serve(async (req) => {
           message_type: actualType,
           content: content || (actualType === "audio" ? "🎵 Áudio" : actualType === "image" ? "📷 Imagem" : actualType === "video" ? "🎥 Vídeo" : "📄 Arquivo"),
           media_url: savedMediaUrl,
+          media_mime_type: media_mimetype || null,
           status: "sent",
           evolution_message_id: messageId,
         })
