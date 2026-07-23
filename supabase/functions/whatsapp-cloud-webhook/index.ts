@@ -274,7 +274,7 @@ Deno.serve(async (req) => {
 
           // Conversa nova: cria lead sem dono pra cair na Fila de Leads.
           if (isNewChat) {
-            const { data: newLead } = await supabase
+            const { data: newLead, error: leadError } = await supabase
               .from("leads")
               .insert({
                 name: pushName || contactPhone,
@@ -289,6 +289,8 @@ Deno.serve(async (req) => {
               })
               .select("id")
               .single();
+
+            if (leadError) console.error("[cloud-webhook] insert lead error:", JSON.stringify(leadError));
 
             if (newLead) {
               // Avisa quem estiver com a Fila de Leads aberta (fire-and-forget)
