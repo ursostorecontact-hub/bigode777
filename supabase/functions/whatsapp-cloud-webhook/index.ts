@@ -108,6 +108,7 @@ Deno.serve(async (req) => {
   // SEMPRE retornar 200 pra Meta não ficar retentando
   try {
     const body = await req.json();
+    console.log("[cloud-webhook] payload recebido:", JSON.stringify(body).slice(0, 2000));
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     const entries = body.entry || [];
