@@ -94,12 +94,19 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Delete: profile and role first, then auth user
-    await adminClient.from("user_roles").delete().eq("user_id", user_id);
-    await adminClient.from("profiles").delete().eq("id", user_id);
-
+    // Apaga a conta de login PRIMEIRO. O perfil e o papel (role) têm
+    // "ON DELETE CASCADE" ligados a auth.users, então ao apagar o login eles
+    // somem sozinhos, de forma atômica. Se apagássemos o perfil antes e a
+    // exclusão do login falhasse por qualquer motivo, sobraria uma "conta
+    // fantasma": login ainda existe, mas sem perfil — e qualquer lead/conversa
+    // ainda atribuída a ela fica invisível pra todo mundo (nem RLS nem o
+    // painel do gerente encontram o dono). Por isso a ordem importa aqui.
     const { error: deleteError } = await adminClient.auth.admin.deleteUser(user_id);
     if (deleteError) throw deleteError;
+
+    // Rede de segurança: caso o cascade não tenha limpado tudo por algum motivo.
+    await adminClient.from("user_roles").delete().eq("user_id", user_id);
+    await adminClient.from("profiles").delete().eq("id", user_id);
 
     return json({ success: true });
   } catch (err: any) {
