@@ -98,14 +98,25 @@ Deno.serve(async (req) => {
         messageId = evoData?.key?.id || null;
 
       } else if (actualType === "audio" && media_base64) {
-        // Upload audio to storage, then send via Evolution API
-        const filename = `audio/${Date.now()}_${crypto.randomUUID()}.ogg`;
+        // Upload audio to storage — extensão baseada no formato REAL do arquivo
+        // (ex: audio/webm de gravações do navegador), nunca fixa em ".ogg":
+        // rótulo/extensão que não bate com o conteúdo real é o que fazia o
+        // áudio chegar mudo/não tocar, tanto no preview quanto no WhatsApp.
+        const audioExtMap: Record<string, string> = {
+          "audio/webm": "webm",
+          "audio/ogg": "ogg",
+          "audio/mpeg": "mp3",
+          "audio/mp4": "m4a",
+          "audio/wav": "wav",
+        };
+        const audioExt = audioExtMap[media_mimetype || ""] || "webm";
+        const filename = `audio/${Date.now()}_${crypto.randomUUID()}.${audioExt}`;
         const audioBuffer = Uint8Array.from(atob(media_base64), c => c.charCodeAt(0));
 
         const { data: uploadData, error: uploadErr } = await supabase.storage
           .from("whatsapp-media")
           .upload(filename, audioBuffer, {
-            contentType: media_mimetype || "audio/ogg",
+            contentType: media_mimetype || "audio/webm",
             upsert: false,
           });
 
@@ -122,8 +133,11 @@ Deno.serve(async (req) => {
           .getPublicUrl(filename);
         savedMediaUrl = publicUrlData?.publicUrl || null;
 
-        // Send audio via Evolution API
-        const evoUrl = `${instanceUrl}/message/sendWhatsAppAudio/${instance.instance_name}`;
+        // Envia como mídia genérica (mesma rota confiável já usada pra imagem/
+        // documento), em vez do endpoint específico de nota de voz — esse
+        // endpoint espera um ogg/opus genuíno e não converte outros formatos,
+        // então qualquer áudio gravado no navegador (webm) chegava mudo por ali.
+        const evoUrl = `${instanceUrl}/message/sendMedia/${instance.instance_name}`;
         const evoRes = await fetch(evoUrl, {
           method: "POST",
           headers: {
@@ -132,7 +146,9 @@ Deno.serve(async (req) => {
           },
           body: JSON.stringify({
             number,
-            audio: savedMediaUrl,
+            mediatype: "audio",
+            media: savedMediaUrl,
+            fileName: `audio.${audioExt}`,
           }),
         });
         evoData = await evoRes.json();

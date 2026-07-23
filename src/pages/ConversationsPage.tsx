@@ -591,10 +591,9 @@ export function MessageArea({
         content: qr.content || '',
         messageType: qr.type,
         mediaBase64: base64,
-        // Áudio sempre é enviado como audio/ogg — é o formato que a função whatsapp-send
-        // salva no storage e envia pra Evolution API/WhatsApp. Usar o mimetype real do
-        // arquivo (ex: audio/webm de gravações do navegador) faz o áudio chegar mudo.
-        mediaMimetype: qr.type === 'audio' ? 'audio/ogg' : (qr.media_mimetype || undefined),
+        // Usa o formato real salvo da mensagem rápida — forçar "audio/ogg" fazia o
+        // rótulo não bater com o conteúdo real do arquivo, quebrando a reprodução.
+        mediaMimetype: qr.media_mimetype || undefined,
       });
     } catch (err: any) {
       toast({ title: 'Erro ao enviar mensagem rápida', description: err.message, variant: 'destructive' });
@@ -662,7 +661,10 @@ export function MessageArea({
               content: '🎵 Áudio',
               messageType: 'audio',
               mediaBase64: base64,
-              mediaMimetype: 'audio/ogg',
+              // Usa o formato real gravado pelo navegador (ex: audio/webm;codecs=opus).
+              // Forçar "audio/ogg" aqui faz o rótulo não bater com o conteúdo real do
+              // arquivo, e isso é o que quebrava a reprodução (chegava mudo/não tocava).
+              mediaMimetype: blob.type || 'audio/webm',
             });
           } catch (err: any) {
             toast({ title: 'Erro ao enviar áudio', description: err.message, variant: 'destructive' });
@@ -878,8 +880,9 @@ export function MessageArea({
                               <div className="flex items-center gap-2 min-w-[240px]">
                                 <Mic className="h-4 w-4 shrink-0 opacity-70" />
                                 <audio controls preload="auto" onLoadedMetadata={fixAudioDuration} className="h-10 w-full max-w-[260px]" style={{ minWidth: '200px' }}>
-                                  <source src={msg.media_url!} type="audio/ogg; codecs=opus" />
-                                  <source src={msg.media_url!} type="audio/ogg" />
+                                  {(msg as any).media_mime_type && (
+                                    <source src={msg.media_url!} type={(msg as any).media_mime_type} />
+                                  )}
                                   <source src={msg.media_url!} />
                                 </audio>
                               </div>
@@ -901,10 +904,11 @@ export function MessageArea({
                               className="h-10 w-full max-w-[260px]"
                               style={{ minWidth: '200px' }}
                             >
+                              {(msg as any).media_mime_type && (
+                                <source src={msg.media_url!} type={(msg as any).media_mime_type} />
+                              )}
                               <source src={msg.media_url!} type="audio/ogg; codecs=opus" />
-                              <source src={msg.media_url!} type="audio/ogg" />
                               <source src={msg.media_url!} type="audio/mpeg" />
-                              <source src={msg.media_url!} type="audio/mp4" />
                               <source src={msg.media_url!} />
                               Seu navegador não suporta áudio.
                             </audio>
