@@ -83,7 +83,86 @@ Deno.serve(async (req) => {
       let savedMediaUrl: string | null = null;
       const actualType = message_type || "text";
 
-      if (actualType === "text") {
+      // ── WhatsApp Cloud API (oficial da Meta) ──────────────────────────
+      // Instâncias com provider="cloud_api" enviam pela Graph API oficial,
+      // em vez da Evolution API. O restante da função (salvar a mensagem no
+      // banco) continua igual pros dois casos.
+      if (instance.provider === "cloud_api") {
+        const cloudToken = Deno.env.get("WHATSAPP_CLOUD_TOKEN") || "";
+        const phoneNumberId: string = instance.cloud_phone_number_id || "";
+        const graphBase = `https://graph.facebook.com/v20.0/${phoneNumberId}`;
+
+        if (actualType === "text") {
+          const res = await fetch(`${graphBase}/messages`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${cloudToken}` },
+            body: JSON.stringify({
+              messaging_product: "whatsapp",
+              to: number,
+              type: "text",
+              text: { body: content },
+            }),
+          });
+          evoData = await res.json();
+          messageId = evoData?.messages?.[0]?.id || null;
+        } else if (media_base64) {
+          // Passo 1: envia o arquivo pra Meta hospedar (endpoint de mídia da
+          // Cloud API) — precisa disso antes de conseguir referenciar o
+          // arquivo numa mensagem.
+          const mimetype = media_mimetype || "application/octet-stream";
+          const bytes = Uint8Array.from(atob(media_base64), c => c.charCodeAt(0));
+          const form = new FormData();
+          form.append("messaging_product", "whatsapp");
+          form.append("file", new Blob([bytes], { type: mimetype }), media_filename || "arquivo");
+
+          const uploadRes = await fetch(`${graphBase}/media`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${cloudToken}` },
+            body: form,
+          });
+          const uploadData = await uploadRes.json();
+          const mediaId = uploadData?.id;
+
+          if (!mediaId) {
+            console.error("Cloud API media upload failed:", JSON.stringify(uploadData));
+            return new Response(JSON.stringify({ error: "Falha ao enviar mídia pra Meta" }), {
+              status: 500,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+
+          // Guarda uma cópia no nosso storage também, pra exibir no CRM sem
+          // depender da URL temporária da Meta (que expira).
+          const filePath = `cloud-sent/${chat.tenant_id}/${Date.now()}_${crypto.randomUUID()}`;
+          const { data: uploadStorage } = await supabase.storage
+            .from("whatsapp-media")
+            .upload(filePath, bytes.buffer, { contentType: mimetype, upsert: false });
+          if (uploadStorage) {
+            const { data: pub } = supabase.storage.from("whatsapp-media").getPublicUrl(filePath);
+            savedMediaUrl = pub?.publicUrl || null;
+          }
+
+          const mediaTypeKey = actualType === "document" ? "document" : actualType;
+          const mediaPayload: Record<string, unknown> = { id: mediaId };
+          if (content) mediaPayload.caption = content;
+          if (media_filename && actualType === "document") mediaPayload.filename = media_filename;
+
+          const sendRes = await fetch(`${graphBase}/messages`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${cloudToken}` },
+            body: JSON.stringify({
+              messaging_product: "whatsapp",
+              to: number,
+              type: mediaTypeKey,
+              [mediaTypeKey]: mediaPayload,
+            }),
+          });
+          evoData = await sendRes.json();
+          messageId = evoData?.messages?.[0]?.id || null;
+        }
+
+        console.log("Cloud API send response:", JSON.stringify(evoData).slice(0, 300));
+      } else if (actualType === "text") {
         // Send text message
         const evoUrl = `${instanceUrl}/message/sendText/${instance.instance_name}`;
         const evoRes = await fetch(evoUrl, {

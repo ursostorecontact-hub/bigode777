@@ -6,5 +6,8 @@ project_id = "xtpczrmbracrvxtppyld"
 [functions.whatsapp-webhook]
 verify_jwt = false
 
+[functions.whatsapp-cloud-webhook]
+verify_jwt = false
+
 [functions.facebook-webhook]
 verify_jwt = false
