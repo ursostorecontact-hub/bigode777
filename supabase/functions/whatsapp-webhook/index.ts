@@ -463,14 +463,14 @@ async function handleMessagesUpsert(
     // liberada pra qualquer vendedor ver/responder sem passar pela pesca.
     if (isNewChat && !isGroup && !fromMe) {
       try {
-        const { data: newLead } = await supabase
+        const { data: newLead, error: leadError } = await supabase
           .from("leads")
           .insert({
             name: contactName || pushName || contactPhone,
             phone: contactPhone,
             // Se veio de um clique em anúncio, já sabemos a origem real —
             // só deixamos null (pra IA tentar descobrir) quando não veio de anúncio.
-            source: adLabel,
+            source: adLabel || "WhatsApp",
             ad_title: adReferral?.title || null,
             ad_source_url: adReferral?.sourceUrl || null,
             status: "novo",
@@ -480,6 +480,8 @@ async function handleMessagesUpsert(
           })
           .select("id")
           .single();
+
+        if (leadError) console.error("[webhook] insert lead error:", JSON.stringify(leadError));
 
         if (newLead) {
           fetch(`${supabaseUrl}/functions/v1/ai-lead-scoring`, {

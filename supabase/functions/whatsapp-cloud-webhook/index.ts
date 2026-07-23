@@ -279,7 +279,7 @@ Deno.serve(async (req) => {
               .insert({
                 name: pushName || contactPhone,
                 phone: contactPhone,
-                source: adLabel,
+                source: adLabel || "WhatsApp",
                 ad_title: (referral?.headline as string) || null,
                 ad_source_url: (referral?.source_url as string) || null,
                 status: "novo",
