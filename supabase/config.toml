@@ -1,1 +1,10 @@
 project_id = "xtpczrmbracrvxtppyld"
+
+# Funções chamadas por serviços externos (não pelo próprio CRM logado) precisam
+# ficar sem exigência de JWT, senão o Supabase bloqueia a chamada antes mesmo
+# dela chegar no código da função.
+[functions.whatsapp-webhook]
+verify_jwt = false
+
+[functions.facebook-webhook]
+verify_jwt = false
